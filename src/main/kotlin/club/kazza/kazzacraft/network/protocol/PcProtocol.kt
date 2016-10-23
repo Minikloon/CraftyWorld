@@ -258,6 +258,38 @@ object Pc {
                     }
                 }
             }
+            class ChunkDataPcPacket(
+                    val x: Int,
+                    val z: Int,
+                    val continuous: Boolean,
+                    val chunkMask: Int,
+                    val sections: List<ByteArray>,
+                    val biomes: ByteArray?
+            ) : PcPacket() {
+                override val id = Codec.id
+                override val codec = Codec
+                companion object Codec : PcPacketCodec() {
+                    override val id = 0x20
+                    override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+                        if(obj !is ChunkDataPcPacket) throw IllegalArgumentException()
+                        stream.writeInt(obj.x)
+                        stream.writeInt(obj.z)
+                        stream.writeBoolean(obj.continuous)
+                        stream.writeVarInt(obj.chunkMask)
+                        val dataSize = obj.sections.sumBy { it.size } + if(obj.biomes == null) 0 else obj.biomes.size
+                        stream.writeVarInt(dataSize)
+                        obj.sections.forEach {
+                            stream.write(it)
+                        }
+                        if(obj.biomes != null)
+                            stream.write(obj.biomes)
+                        stream.writeVarInt(0)
+                    }
+                    override fun deserialize(stream: MinecraftInputStream): PcPacket {
+                        throw NotImplementedError()
+                    }
+                }
+            }
             class JoinGamePcPacket(
                     val eid: Int,
                     val gamemode: Int,

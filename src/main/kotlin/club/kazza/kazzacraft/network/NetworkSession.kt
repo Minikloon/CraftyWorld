@@ -1,6 +1,7 @@
 package club.kazza.kazzacraft.network
 
 import club.kazza.kazzacraft.Location
+import club.kazza.kazzacraft.VariableValueArray
 import club.kazza.kazzacraft.network.protocol.*
 import io.vertx.core.Handler
 import io.vertx.core.buffer.Buffer
@@ -157,7 +158,20 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                         send(Pc.Server.Play.JoinGamePcPacket(3, 1, 0, 0, 20, "flat", false))
                         send(Pc.Server.Play.ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
                         send(Pc.Server.Play.SpawnPositionPcPacket(Location(1.0, 20.0, 1.0)))
-                        send(Pc.Server.Play.PlayerTeleportPcPacket(Location(1.0, 20.0, 1.0), 0, 1))
+
+                        val biomes = ByteArray(256)
+                        biomes.fill(1)
+
+                        for (x in -4..4) {
+                            for (z in -4..4) {
+                                val chunkColumn = (0 until 16).map { createChunkSection(x, it, z) }
+                                send(Pc.Server.Play.ChunkDataPcPacket(x, z, true, 0b1111111111111111, chunkColumn, biomes))
+                            }
+                        }
+
+
+                        send(Pc.Server.Play.PlayerTeleportPcPacket(Location(1.0, 50.0, 1.0), 0, 1))
+
                     } else {
                         it.cause().printStackTrace()
                     }
@@ -167,6 +181,29 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                 println("Unhandled Login packet ${packet.javaClass.simpleName}")
             }
         }
+    }
+
+    private fun createChunkSection(x: Int, y: Int, z: Int) : ByteArray {
+        val grass = 0b100000
+        val air = 0
+        val block = if(y < 3 && Math.abs(x) <= 3 && Math.abs(z) <= 3) grass else air
+
+        val csbs = ByteArrayOutputStream()
+        val css = MinecraftOutputStream(csbs)
+        css.writeByte(13) // bits per block
+        css.writeVarInt(0) // palette length
+        //css.writeVarInt(0) // palette array
+        val data = VariableValueArray(13, 4096)
+        for(i in 0 until 4096)
+            data.set(i, block)
+        println(data.backing.size)
+        css.writeVarInt(data.backing.size)
+        data.backing.forEach { css.writeLong(it) }
+        for(i in 0 until 4096/2)
+            css.writeByte(0b11101110)
+        for(i in 0 until 4096/2)
+            css.writeByte(0b11101110)
+        return csbs.toByteArray()
     }
 
     private fun createCipher(mode: Int, secret: SecretKey) : Cipher {

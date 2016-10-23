@@ -44,13 +44,13 @@ class MinecraftServer(val port: Int) : AbstractVerticle() {
         }
         server.listen(port)
 
-        vertx.setPeriodic(3000) {
-            for(session in sessions.values)
+        vertx.setPeriodic(2000) {
+            for(session in sessions.values.filter { it.state == NetworkSession.State.PLAY })
                 session.send(Pc.Server.Play.ServerKeepAlivePcPacket(0))
         }
 
         vertx.setPeriodic(1000) {
-            val toRemove = sessions.filter { it.value.lastUpdate.elapsedMs > 3000 }
+            val toRemove = sessions.filter { it.value.lastUpdate.elapsedMs > 3500 }
             for(key in toRemove.keys)
                 sessions.remove(key)
         }
