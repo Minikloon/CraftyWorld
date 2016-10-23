@@ -16,5 +16,8 @@ enum class NbtTagType(val codec: NbtTag.NbtTagCodec, val notchianName: String) {
     INT_ARRAY(NbtIntArray.Codec, "TAG_Int_Array"),
     ;
 
-    val itToCodec = NbtTagType.values().associateBy { it.codec.id }
+    companion object {
+        val idToCodec = NbtTagType.values().associate { type -> Pair(type.codec.id, type.codec) }
+        val idToType = NbtTagType.values().associateBy { type -> type.codec.id }
+    }
 }

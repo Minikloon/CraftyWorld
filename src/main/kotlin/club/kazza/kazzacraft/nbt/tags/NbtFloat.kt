@@ -19,7 +19,7 @@ class NbtFloat(name: String?, val value: Float) : NbtValueTag(name) {
         override val id = 5
 
         override fun serialize(obj: Any, stream: DataOutputStream) {
-            if(obj !is NbtFloat) return
+            if(obj !is NbtFloat) throw IllegalArgumentException()
             stream.writeFloat(obj.value)
         }
         override fun deserialize(name: String?, stream: NbtInputStream): NbtTag {

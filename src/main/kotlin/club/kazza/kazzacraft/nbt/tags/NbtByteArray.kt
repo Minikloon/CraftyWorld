@@ -20,7 +20,7 @@ class NbtByteArray(name: String?, val value: ByteArray) : NbtValueTag(name) {
             get() = 7
 
         override fun serialize(obj: Any, stream: DataOutputStream) {
-            if(obj !is NbtByteArray) return
+            if(obj !is NbtByteArray) throw IllegalArgumentException()
             stream.writeInt(obj.value.size)
             stream.write(obj.value)
         }

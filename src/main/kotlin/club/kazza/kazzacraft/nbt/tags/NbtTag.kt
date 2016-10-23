@@ -35,9 +35,11 @@ abstract class NbtTag(val name: String?) {
     abstract class NbtTagCodec {
         abstract val id: Int
         abstract fun serialize(obj: Any, stream: DataOutputStream)
-        fun deserialize(stream: NbtInputStream) : NbtTag {
-            return deserialize(stream.readUTF(), stream)
+        open fun deserialize(stream: NbtInputStream) : NbtTag {
+            val name = stream.readUTF()
+            println("reading ${javaClass.name} id $id name $name")
+            return deserialize(name, stream)
         }
-        protected abstract fun deserialize(name: String?, stream: NbtInputStream) : NbtTag
+        abstract fun deserialize(name: String?, stream: NbtInputStream) : NbtTag
     }
 }

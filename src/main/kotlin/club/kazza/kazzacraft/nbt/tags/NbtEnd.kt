@@ -20,6 +20,9 @@ class NbtEnd : NbtTag(null) {
 
         override fun serialize(obj: Any, stream: DataOutputStream) {
         }
+        override fun deserialize(stream: NbtInputStream): NbtTag {
+            return deserialize(null, stream)
+        }
         override fun deserialize(name: String?, stream: NbtInputStream): NbtTag {
             return NbtEnd()
         }

@@ -19,7 +19,7 @@ class NbtInt(name: String?, val value: Int) : NbtValueTag(name) {
         override val id = 3
 
         override fun serialize(obj: Any, stream: DataOutputStream) {
-            if(obj !is NbtInt) return
+            if(obj !is NbtInt) throw IllegalArgumentException()
             stream.writeInt(obj.value)
         }
         override fun deserialize(name: String?, stream: NbtInputStream): NbtTag {

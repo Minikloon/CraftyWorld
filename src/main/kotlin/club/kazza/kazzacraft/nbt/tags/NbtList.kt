@@ -103,17 +103,18 @@ class NbtList(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(name
         override val id = 9
 
         override fun serialize(obj: Any, stream: DataOutputStream) {
-            if(obj !is NbtList) return
+            if(obj !is NbtList) throw IllegalArgumentException()
             stream.writeByte(obj.listType.codec.id)
             stream.writeInt(obj.tags.size)
             obj.tags.forEach { it.codec.serialize(it, stream) }
         }
         override fun deserialize(name: String?, stream: NbtInputStream): NbtTag {
-            val tagTypeId = stream.readByte()
+            val tagTypeId = stream.readByte().toInt()
+            val codec = NbtTagType.idToCodec[tagTypeId] ?: throw IllegalStateException("Unknown id $tagTypeId while reading NbtList")
             val ln = stream.readInt()
             val tags = ArrayList<NbtTag>(ln)
-            for(i in 0..ln) {
-                val tag = stream.readTag() ?: break
+            for(i in 0 until ln) {
+                val tag = codec.deserialize(null, stream)
                 tags.add(tag)
             }
             return NbtList(name, tags)

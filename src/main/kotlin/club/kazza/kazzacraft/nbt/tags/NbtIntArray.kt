@@ -19,7 +19,7 @@ class NbtIntArray(name: String?, val value: IntArray) : NbtValueTag(name) {
         override val id = 11
 
         override fun serialize(obj: Any, stream: DataOutputStream) {
-            if(obj !is NbtIntArray) return
+            if(obj !is NbtIntArray) throw IllegalArgumentException()
             stream.writeInt(obj.value.size)
             obj.value.forEach { stream.writeInt(it) }
         }
