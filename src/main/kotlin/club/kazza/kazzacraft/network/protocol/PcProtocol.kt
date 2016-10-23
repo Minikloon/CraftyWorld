@@ -43,6 +43,7 @@ object ServerBoundPcLoginPackets : InboundPacketList() {
 object ServerBoundPcPlayPackets : InboundPacketList() {
     override fun getCodecs() = listOf(
             Pc.Client.Play.ClientStatusPcPacket,
+            Pc.Client.Play.ClientChatMessagePcPacket,
             Pc.Client.Play.PlayerPosAndLook,
             Pc.Client.Play.ClientPluginMessagePcPacket,
             Pc.Client.Play.ClientSettingsPcPacket,
@@ -205,7 +206,7 @@ object Pc {
                     val difficulty: Int
             ) : PcPacket() {
                 override val id = Codec.id
-                override val codec= Codec
+                override val codec = Codec
                 companion object Codec : PcPacketCodec() {
                     override val id = 0x0D
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
@@ -215,6 +216,28 @@ object Pc {
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return ServerDifficultyPcPacket(
                                 difficulty = stream.readUnsignedByte()
+                        )
+                    }
+                }
+            }
+            class ServerChatMessage(
+                    val chat: McChat,
+                    val position: Int
+            ) : PcPacket() {
+                override val id = Codec.id
+                override val codec = Codec
+                companion object Codec : PcPacketCodec() {
+                    override val id = 0x0F
+                    override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+                        if(obj !is ServerChatMessage) throw IllegalArgumentException()
+                        val json = Json.encode(obj.chat)
+                        stream.writeString(json)
+                        stream.writeByte(obj.position)
+                    }
+                    override fun deserialize(stream: MinecraftInputStream): PcPacket {
+                        return ServerChatMessage(
+                                chat = Json.decodeValue(stream.readString(), McChat::class.java),
+                                position = stream.readByte().toInt()
                         )
                     }
                 }
@@ -532,6 +555,24 @@ object Pc {
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return PlayerTeleportConfirmPcPacket(
                                 confirmId = stream.readVarInt()
+                        )
+                    }
+                }
+            }
+            class ClientChatMessagePcPacket(
+                    val message: String
+            ) : PcPacket() {
+                override val id = Codec.id
+                override val codec = Codec
+                companion object Codec : PcPacketCodec() {
+                    override val id = 0x02
+                    override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+                        if(obj !is ClientChatMessagePcPacket) throw IllegalArgumentException()
+                        stream.writeString(obj.message)
+                    }
+                    override fun deserialize(stream: MinecraftInputStream): PcPacket {
+                        return ClientChatMessagePcPacket(
+                                message = stream.readString()
                         )
                     }
                 }

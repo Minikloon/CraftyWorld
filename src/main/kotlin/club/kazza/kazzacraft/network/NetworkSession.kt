@@ -169,7 +169,6 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                             }
                         }
 
-
                         send(Pc.Server.Play.PlayerTeleportPcPacket(Location(1.0, 50.0, 1.0), 0, 1))
 
                     } else {
@@ -231,6 +230,12 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                         println("Unhandled packet on channel $channel with ${packet.data.size} bytes")
                     }
                 }
+            }
+            is Pc.Client.Play.ClientChatMessagePcPacket -> {
+                val chat = Pc.Server.Play.ServerChatMessage(McChat("<$username> ${packet.message}"), 0)
+                server.sessions.values
+                        .filter { it.state == PLAY }
+                        .forEach { it.send(chat) }
             }
             else -> {
                 println("Unhandled Play packet ${packet.javaClass.simpleName}")
