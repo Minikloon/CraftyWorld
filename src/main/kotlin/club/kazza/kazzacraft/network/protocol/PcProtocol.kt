@@ -3,6 +3,7 @@ package club.kazza.kazzacraft.network.protocol
 import club.kazza.kazzacraft.Location
 import club.kazza.kazzacraft.network.serialization.MinecraftInputStream
 import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
+import club.kazza.kazzacraft.world.ChunkSection
 import io.vertx.core.json.Json
 import java.io.InputStream
 import java.io.OutputStream
@@ -64,6 +65,7 @@ abstract class PcPacket {
 
     abstract class PcPacketCodec {
         abstract val id: Int
+        open val expectedSize: Int = 24
         abstract fun serialize(obj: Any, stream: MinecraftOutputStream)
         fun deserialize(stream: InputStream) : PcPacket { return deserialize(MinecraftInputStream(stream)); }
         abstract fun deserialize(stream: MinecraftInputStream) : PcPacket
@@ -286,23 +288,25 @@ object Pc {
                     val z: Int,
                     val continuous: Boolean,
                     val chunkMask: Int,
-                    val sections: List<ByteArray>,
+                    val sections: Array<ChunkSection?>,
                     val biomes: ByteArray?
             ) : PcPacket() {
                 override val id = Codec.id
                 override val codec = Codec
                 companion object Codec : PcPacketCodec() {
                     override val id = 0x20
+                    override val expectedSize = 180000
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is ChunkDataPcPacket) throw IllegalArgumentException()
                         stream.writeInt(obj.x)
                         stream.writeInt(obj.z)
                         stream.writeBoolean(obj.continuous)
                         stream.writeVarInt(obj.chunkMask)
-                        val dataSize = obj.sections.sumBy { it.size } + if(obj.biomes == null) 0 else obj.biomes.size
+                        val sections = obj.sections.filterNotNull()
+                        val dataSize = sections.sumBy { it.byteSize } + if(obj.biomes == null) 0 else obj.biomes.size
                         stream.writeVarInt(dataSize)
-                        obj.sections.forEach {
-                            stream.write(it)
+                        sections.forEach {
+                            it.writeToStream(stream)
                         }
                         if(obj.biomes != null)
                             stream.write(obj.biomes)

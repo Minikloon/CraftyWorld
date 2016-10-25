@@ -1,7 +1,7 @@
 package club.kazza.kazzacraft.network
 
 import club.kazza.kazzacraft.Location
-import club.kazza.kazzacraft.VariableValueArray
+import club.kazza.kazzacraft.utils.LongPackedArray
 import club.kazza.kazzacraft.network.protocol.*
 import io.vertx.core.Handler
 import io.vertx.core.buffer.Buffer
@@ -12,11 +12,14 @@ import club.kazza.kazzacraft.network.serialization.LengthPrefixedHandler
 import club.kazza.kazzacraft.network.serialization.MinecraftInputStream
 import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
 import club.kazza.kazzacraft.utils.Clock
+import club.kazza.kazzacraft.world.ChunkColumn
+import club.kazza.kazzacraft.world.Dimension
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
 import javax.crypto.Cipher
+import javax.crypto.CipherOutputStream
 import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -52,11 +55,16 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
 
     fun send(packet: PcPacket) {
         val packetStream = ByteArrayOutputStream()
-        val mcPacketStream = MinecraftOutputStream(packetStream)
-        mcPacketStream.writePacket(packet)
+        if(encrypted) {
+            val cipherStream = CipherOutputStream(packetStream, cipher)
+            val mcPacketStream = MinecraftOutputStream(cipherStream)
+            mcPacketStream.writePacket(packet)
+        } else {
+            val mcPacketStream = MinecraftOutputStream(packetStream)
+            mcPacketStream.writePacket(packet)
+        }
+
         var bytes = packetStream.toByteArray()
-        if(encrypted)
-            bytes = cipher.update(bytes)
         println("sent ${packet.javaClass.simpleName} with ${bytes.size} bytes")
         socket.write(Buffer.buffer(bytes))
     }
@@ -159,15 +167,17 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                         send(Pc.Server.Play.ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
                         send(Pc.Server.Play.SpawnPositionPcPacket(Location(1.0, 20.0, 1.0)))
 
-                        val biomes = ByteArray(256)
-                        biomes.fill(1)
-
+                        /*
                         for (x in -4..4) {
                             for (z in -4..4) {
-                                val chunkColumn = (0 until 16).map { createChunkSection(x, it, z) }
-                                send(Pc.Server.Play.ChunkDataPcPacket(x, z, true, 0b1111111111111111, chunkColumn, biomes))
+                                val chunk = ChunkColumn(x, z, Dimension.OVERWORLD)
+                                chunk.setTypeAndData(0, 20, 0, 1, 0)
+                                send(chunk.toPacket())
                             }
                         }
+                        */
+
+                        send(Pc.Server.Play.ServerChatMessage(McChat("Welcome!"), 0))
 
                         send(Pc.Server.Play.PlayerTeleportPcPacket(Location(1.0, 50.0, 1.0), 0, 1))
 
@@ -192,10 +202,9 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
         css.writeByte(13) // bits per block
         css.writeVarInt(0) // palette length
         //css.writeVarInt(0) // palette array
-        val data = VariableValueArray(13, 4096)
+        val data = LongPackedArray(13, 4096)
         for(i in 0 until 4096)
             data.set(i, block)
-        println(data.backing.size)
         css.writeVarInt(data.backing.size)
         data.backing.forEach { css.writeLong(it) }
         for(i in 0 until 4096/2)

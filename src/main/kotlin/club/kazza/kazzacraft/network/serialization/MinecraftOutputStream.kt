@@ -2,6 +2,7 @@ package club.kazza.kazzacraft.network.serialization
 
 import club.kazza.kazzacraft.Location
 import club.kazza.kazzacraft.network.protocol.PcPacket
+import club.kazza.kazzacraft.world.ChunkSection
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.OutputStream
@@ -12,7 +13,7 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
 
     fun writeVarInt(value: Int) {
         var v = value
-        val bytes = mutableListOf<Byte>()
+        val bytes = ArrayList<Byte>(4)
         while((v and -0x80) != 0x00) {
             bytes.add((v and 0x7F or 0x80).toByte())
             v = (v shr 7)
@@ -39,6 +40,10 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         writeLong(value.leastSignificantBits)
     }
 
+    fun writeChunkSection(section: ChunkSection) {
+
+    }
+
     fun writePacket(packet: PcPacket, compressed: Boolean = false) {
         val contentStream = ByteArrayOutputStream()
         val contentMcStream = MinecraftOutputStream(contentStream)
@@ -49,5 +54,17 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         if(compressed) writeVarInt(0)
         writeVarInt(packet.id)
         write(contentBytes)
+    }
+
+    companion object {
+        fun varIntSize(value: Int) : Int {
+            var v = value
+            var size = 0
+            while((v and -0x80) != 0x00) {
+                ++size
+                v = (v shr 7)
+            }
+            return size + 1
+        }
     }
 }
