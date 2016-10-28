@@ -9,10 +9,11 @@ import club.kazza.kazzacraft.network.security.convertKeyToX509
 import club.kazza.kazzacraft.network.security.createDecipher
 import club.kazza.kazzacraft.network.security.generateKeyPair
 import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
+import club.kazza.kazzacraft.world.World
 import java.io.ByteArrayOutputStream
 import javax.crypto.Cipher
 
-class MinecraftServer(val port: Int) : AbstractVerticle() {
+class MinecraftServer(val port: Int, val world: World) : AbstractVerticle() {
     lateinit var server: NetServer
     val sessions = mutableMapOf<NetSocket, NetworkSession>()
 
@@ -44,7 +45,7 @@ class MinecraftServer(val port: Int) : AbstractVerticle() {
         }
         server.listen(port)
 
-        vertx.setPeriodic(2000) {
+        vertx.setPeriodic(1000) {
             for(session in sessions.values.filter { it.state == NetworkSession.State.PLAY })
                 session.send(Pc.Server.Play.ServerKeepAlivePcPacket(0))
         }

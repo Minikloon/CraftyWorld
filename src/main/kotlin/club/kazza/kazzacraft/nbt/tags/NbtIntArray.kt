@@ -26,7 +26,7 @@ class NbtIntArray(name: String?, val value: IntArray) : NbtValueTag(name) {
         override fun deserialize(name: String?, stream: NbtInputStream): NbtTag {
             val len = stream.readInt()
             val array = IntArray(len)
-            for(i in 0..len)
+            for(i in 0 until len)
                 array[i] = stream.readInt()
             return NbtIntArray(name, array)
         }

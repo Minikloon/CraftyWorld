@@ -152,9 +152,9 @@ object Pc {
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         val serverId = stream.readString()
                         val publicKey = ByteArray(stream.readVarInt())
-                        stream.read(publicKey)
+                        stream.readFully(publicKey)
                         val verifyToken = ByteArray(stream.readVarInt())
-                        stream.read(verifyToken)
+                        stream.readFully(verifyToken)
                         return EncryptionRequestPcPacket(
                                 serverId = serverId,
                                 publicKey = publicKey,
@@ -533,9 +533,9 @@ object Pc {
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         val sharedSecret = ByteArray(stream.readVarInt())
-                        stream.read(sharedSecret)
+                        stream.readFully(sharedSecret)
                         val verifyToken = ByteArray(stream.readVarInt())
-                        stream.read(verifyToken)
+                        stream.readFully(verifyToken)
                         return EncryptionResponsePcPacket(
                                 sharedSecret = sharedSecret,
                                 verifyToken = verifyToken

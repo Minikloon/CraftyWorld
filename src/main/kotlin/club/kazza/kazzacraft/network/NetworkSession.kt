@@ -13,6 +13,7 @@ import club.kazza.kazzacraft.network.serialization.MinecraftInputStream
 import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
 import club.kazza.kazzacraft.utils.Clock
 import club.kazza.kazzacraft.world.ChunkColumn
+import club.kazza.kazzacraft.world.ChunkSection
 import club.kazza.kazzacraft.world.Dimension
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -64,8 +65,7 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
             mcPacketStream.writePacket(packet)
         }
 
-        var bytes = packetStream.toByteArray()
-        println("sent ${packet.javaClass.simpleName} with ${bytes.size} bytes")
+        val bytes = packetStream.toByteArray()
         socket.write(Buffer.buffer(bytes))
     }
 
@@ -165,21 +165,20 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                         send(Pc.Server.Login.LoginSuccessPcPacket(profile.uuid, profile.name))
                         send(Pc.Server.Play.JoinGamePcPacket(3, 1, 0, 0, 20, "flat", false))
                         send(Pc.Server.Play.ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
-                        send(Pc.Server.Play.SpawnPositionPcPacket(Location(1.0, 20.0, 1.0)))
 
-                        /*
-                        for (x in -4..4) {
-                            for (z in -4..4) {
-                                val chunk = ChunkColumn(x, z, Dimension.OVERWORLD)
-                                chunk.setTypeAndData(0, 20, 0, 1, 0)
-                                send(chunk.toPacket())
-                            }
-                        }
-                        */
+                        val world = server.world
+                        val spawnPos = world.spawn
+                        //val spawnPos = Location(1.0, 30.0, 1.0)
+
+                        send(Pc.Server.Play.SpawnPositionPcPacket(spawnPos))
+
+                        val toSend = world.chunks.filter { (it.x - spawnPos.x/16) * (it.x - spawnPos.x/16) + (it.z - spawnPos.z/16) * (it.z - spawnPos.z/16) < 8*8 }
+                        toSend.map { it.toPacket() }.forEach { send(it) }
+                        println("sent ${toSend.size} chunks")
 
                         send(Pc.Server.Play.ServerChatMessage(McChat("Welcome!"), 0))
 
-                        send(Pc.Server.Play.PlayerTeleportPcPacket(Location(1.0, 50.0, 1.0), 0, 1))
+                        send(Pc.Server.Play.PlayerTeleportPcPacket(spawnPos, 0, 1))
 
                     } else {
                         it.cause().printStackTrace()
@@ -190,28 +189,6 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                 println("Unhandled Login packet ${packet.javaClass.simpleName}")
             }
         }
-    }
-
-    private fun createChunkSection(x: Int, y: Int, z: Int) : ByteArray {
-        val grass = 0b100000
-        val air = 0
-        val block = if(y < 3 && Math.abs(x) <= 3 && Math.abs(z) <= 3) grass else air
-
-        val csbs = ByteArrayOutputStream()
-        val css = MinecraftOutputStream(csbs)
-        css.writeByte(13) // bits per block
-        css.writeVarInt(0) // palette length
-        //css.writeVarInt(0) // palette array
-        val data = LongPackedArray(13, 4096)
-        for(i in 0 until 4096)
-            data.set(i, block)
-        css.writeVarInt(data.backing.size)
-        data.backing.forEach { css.writeLong(it) }
-        for(i in 0 until 4096/2)
-            css.writeByte(0b11101110)
-        for(i in 0 until 4096/2)
-            css.writeByte(0b11101110)
-        return csbs.toByteArray()
     }
 
     private fun createCipher(mode: Int, secret: SecretKey) : Cipher {
@@ -226,7 +203,7 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                 println("Client settings like locale ${packet.locale}")
             }
             is Pc.Client.Play.ClientKeepAlivePcPacket -> {
-                println("Client keepalive")
+
             }
             is Pc.Client.Play.ClientPluginMessagePcPacket -> {
                 val channel = packet.channel

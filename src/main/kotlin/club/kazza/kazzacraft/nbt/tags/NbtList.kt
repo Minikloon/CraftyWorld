@@ -20,8 +20,12 @@ class NbtList(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(name
                 if(tags.any { it.tagType != value })
                     throw IllegalArgumentException("Assigned tag type $value doesn't match all elements in list")
             }
-            listType = value
+            field = value
         }
+
+    init {
+        tags.forEach { add(it) }
+    }
 
     fun add(tag: NbtTag) {
         require(tag != this && tag != parent) { "Can't add list tag to itself or its child" }
@@ -78,7 +82,7 @@ class NbtList(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(name
     }
 
     override fun prettyPrint(sb: StringBuilder, indentStr: String, indentLevel: Int) {
-        for(i in 0..indentLevel) {
+        for(i in 0 until indentLevel) {
             sb.append(indentStr)
         }
         sb.append(tagType.notchianName)
@@ -93,7 +97,7 @@ class NbtList(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(name
                 it.prettyPrint(sb, indentStr, indentLevel + 1)
                 sb.appendln()
             }
-            for(i in 0..indentLevel)
+            for(i in 0 until indentLevel)
                 sb.append(indentStr)
         }
         sb.append("}")

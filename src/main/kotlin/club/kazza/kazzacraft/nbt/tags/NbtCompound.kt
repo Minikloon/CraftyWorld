@@ -2,6 +2,7 @@ package club.kazza.kazzacraft.nbt.tags
 
 import club.kazza.kazzacraft.nbt.NbtInputStream
 import java.io.DataOutputStream
+import java.util.*
 
 class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(name), Iterable<NbtTag> {
     override val tagType = NbtTagType.COMPOUND
@@ -46,7 +47,7 @@ class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(
     val size: Int
         get() = tags.size
 
-    fun get(tagName: String) : NbtTag? {
+    operator fun get(tagName: String) : NbtTag? {
         return tags[tagName]
     }
 
@@ -61,7 +62,7 @@ class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(
     }
 
     override fun prettyPrint(sb: StringBuilder, indentStr: String, indentLevel: Int) {
-        for(i in 0..indentLevel)
+        for(i in 0 until indentLevel)
             sb.append(indentStr)
         sb.append(tagType.notchianName)
         sb.append("(\"$name\")")
@@ -72,7 +73,7 @@ class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(
                 it.prettyPrint(sb, indentStr, indentLevel + 1)
                 sb.appendln()
             }
-            for(i in 0..indentLevel)
+            for(i in 0 until indentLevel)
                 sb.append(indentStr)
         }
         sb.append('}')
@@ -86,7 +87,7 @@ class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(
             stream.writeByte(NbtEnd.Codec.id)
         }
         override fun deserialize(name: String?, stream: NbtInputStream): NbtTag {
-            val children = mutableListOf<NbtTag>()
+            val children = ArrayList<NbtTag>(5)
             while(true) {
                 val child = stream.readTag() ?: throw IllegalStateException("Null tag in NbtCompound")
                 if(child is NbtEnd)

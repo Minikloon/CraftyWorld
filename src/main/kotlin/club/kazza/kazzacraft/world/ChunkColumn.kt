@@ -2,24 +2,41 @@ package club.kazza.kazzacraft.world
 
 import club.kazza.kazzacraft.network.protocol.Pc
 
-class ChunkColumn(val x: Int, val z: Int, val dimension: Dimension) {
-    private val sections: Array<ChunkSection?> = arrayOfNulls(16)
-    private val biomes = ByteArray(256)
+class ChunkColumn(val x: Int, val z: Int, val sections: Array<ChunkSection?>, val biomes: ByteArray, val dimension: Dimension = Dimension.OVERWORLD) {
+    constructor(x: Int, z: Int, dimension: Dimension = Dimension.OVERWORLD) : this(
+            x,
+            z,
+            kotlin.arrayOfNulls(16),
+            ByteArray(256),
+            dimension
+    )
 
     fun setTypeAndData(x: Int, y: Int, z: Int, type: Int, data: Int) {
         val section = getSection(y)
         section.setTypeAndData(x, y, z, type, data)
     }
 
-    fun setBiome(x: Int, z: Int) {
+    fun setBiome(x: Int, z: Int, biome: Byte) {
         val index = (z shl 4) or x
+        biomes[index] = biome
+    }
+
+    fun setBlockLight(x: Int, y: Int, z: Int, level: Int) {
+        val section = getSection(y)
+        section.setBlockLight(x, y, z, level)
+    }
+
+    fun setSkyLight(x: Int, y: Int, z: Int, level: Int) {
+        val section = getSection(y)
+        section.setBlockLight(x, y, z, level)
     }
 
     private fun getChunkMask() : Int {
         var mask = 0
-        sections.forEach {
+        for(i in 15 downTo 0) {
+            val section = sections[i]
             mask = mask shl 1
-            if(it != null)
+            if(section != null)
                 mask = mask or 1
         }
         return mask
@@ -37,7 +54,6 @@ class ChunkColumn(val x: Int, val z: Int, val dimension: Dimension) {
 
     fun toPacket() : Pc.Server.Play.ChunkDataPcPacket {
         val chunkMask = getChunkMask()
-        val continuous = chunkMask == 0xFFFF
-        return Pc.Server.Play.ChunkDataPcPacket(x, z, continuous, chunkMask, sections, if(continuous) biomes else null)
+        return Pc.Server.Play.ChunkDataPcPacket(x, z, true, chunkMask, sections, biomes)
     }
 }

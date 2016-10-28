@@ -37,7 +37,6 @@ abstract class NbtTag(val name: String?) {
         abstract fun serialize(obj: Any, stream: DataOutputStream)
         open fun deserialize(stream: NbtInputStream) : NbtTag {
             val name = stream.readUTF()
-            println("reading ${javaClass.name} id $id name $name")
             return deserialize(name, stream)
         }
         abstract fun deserialize(name: String?, stream: NbtInputStream) : NbtTag

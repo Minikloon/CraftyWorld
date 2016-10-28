@@ -5,7 +5,7 @@ abstract class NbtValueTag(name: String?) : NbtTag(name) {
         get() = true
 
     final override fun prettyPrint(sb: StringBuilder, indentStr: String, indentLevel: Int) {
-        for(i in 0..indentLevel) {
+        for(i in 0 until indentLevel) {
             sb.append(indentStr)
         }
         sb.append(tagType.notchianName)

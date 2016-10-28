@@ -27,7 +27,7 @@ class NbtByteArray(name: String?, val value: ByteArray) : NbtValueTag(name) {
         override fun deserialize(name: String?, stream: NbtInputStream): NbtTag {
             val len = stream.readInt()
             val value = ByteArray(len)
-            stream.read(value)
+            stream.readFully(value)
             return NbtByteArray(name, value)
         }
     }

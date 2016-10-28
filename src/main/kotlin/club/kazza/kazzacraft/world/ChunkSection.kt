@@ -12,11 +12,19 @@ private val depth = 16
 private val blocksPerSection = width * height * depth
 private val bitsPerBlock = 13
 
-class ChunkSection(dimension: Dimension) {
-    private val typeAndData = LongPackedArray(bitsPerBlock, blocksPerSection)
-    private val blockLight = NibbleArray(blocksPerSection)
-    private val skyLight: NibbleArray? = if(dimension == Dimension.OVERWORLD) NibbleArray(blocksPerSection) else null
-    val byteSize = 2 + varIntSize(832) + typeAndData.backing.size * 8 + blockLight.backing.size + if(skyLight == null) 0 else skyLight.backing.size
+class ChunkSection(val typeAndData: LongPackedArray, val blockLight: NibbleArray, val skyLight: NibbleArray?) {
+    val byteSize = 2 + varIntSize(typeAndData.backing.size * 8) + typeAndData.backing.size * 8 + blockLight.backing.size + if(skyLight == null) 0 else skyLight.backing.size
+
+    constructor(dimension: Dimension = Dimension.OVERWORLD) : this(
+            NibbleArray(blocksPerSection),
+            if(dimension == Dimension.OVERWORLD) NibbleArray(blocksPerSection) else null
+    )
+
+    constructor(blockLight: NibbleArray, skyLight: NibbleArray?) : this(
+            LongPackedArray(bitsPerBlock, blocksPerSection),
+            blockLight,
+            skyLight
+    )
 
     fun setTypeAndData(x: Int, y: Int, z: Int, type: Int, data: Int) {
         val combined = (type shl 4) or data
@@ -33,7 +41,7 @@ class ChunkSection(dimension: Dimension) {
     }
 
     private fun getIndex(x: Int, y: Int, z: Int) : Int {
-        return ((y and 0xf) shl 8) or (z shl 4) or x
+        return ((y % 16) shl 8) or (z shl 4) or x
     }
 
     fun writeToStream(stream: MinecraftOutputStream) {

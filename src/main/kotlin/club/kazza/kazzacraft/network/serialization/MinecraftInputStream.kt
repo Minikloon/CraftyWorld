@@ -8,6 +8,7 @@ import java.util.*
 
 class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
     constructor(bytes: ByteArray) : this(ByteArrayInputStream(bytes))
+    constructor(bytes: ByteArray, offset: Int, length: Int) : this(ByteArrayInputStream(bytes, offset, length))
 
     fun readVarInt() : Int {
         var value = 0
