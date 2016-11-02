@@ -3,6 +3,7 @@ package club.kazza.kazzacraft.network.serialization
 import club.kazza.kazzacraft.Location
 import club.kazza.kazzacraft.network.protocol.PcPacket
 import club.kazza.kazzacraft.world.ChunkSection
+import io.vertx.core.json.Json
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.OutputStream
@@ -26,6 +27,11 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         val bytes = value.toByteArray(Charsets.UTF_8)
         writeVarInt(bytes.size)
         write(bytes)
+    }
+
+    fun writeJson(value: Any) {
+        val json = Json.encode(value)
+        writeString(json)
     }
 
     fun writeBlockLocation(value: Location) {

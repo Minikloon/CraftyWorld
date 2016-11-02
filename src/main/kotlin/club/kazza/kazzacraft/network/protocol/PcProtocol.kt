@@ -232,8 +232,7 @@ object Pc {
                     override val id = 0x0F
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is ServerChatMessage) throw IllegalArgumentException()
-                        val json = Json.encode(obj.chat)
-                        stream.writeString(json)
+                        stream.writeJson(obj.chat)
                         stream.writeByte(obj.position)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
@@ -425,6 +424,27 @@ object Pc {
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return SpawnPositionPcPacket(
                                 loc = stream.readBlockLocation()
+                        )
+                    }
+                }
+            }
+            class PlayerListHeaderFooterPcPacket(
+                    val header: McChat,
+                    val footer: McChat
+            ) : PcPacket() {
+                override val id = Codec.id
+                override val codec = Codec
+                companion object Codec : PcPacketCodec() {
+                    override val id = 0x47
+                    override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+                        if(obj !is PlayerListHeaderFooterPcPacket) throw IllegalArgumentException()
+                        stream.writeJson(obj.header)
+                        stream.writeJson(obj.footer)
+                    }
+                    override fun deserialize(stream: MinecraftInputStream): PcPacket {
+                        return PlayerListHeaderFooterPcPacket(
+                                header = Json.decodeValue(stream.readString(), McChat::class.java),
+                                footer = Json.decodeValue(stream.readString(), McChat::class.java)
                         )
                     }
                 }

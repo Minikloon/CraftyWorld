@@ -168,15 +168,14 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
 
                         val world = server.world
                         val spawnPos = world.spawn
-                        //val spawnPos = Location(1.0, 30.0, 1.0)
 
                         send(Pc.Server.Play.SpawnPositionPcPacket(spawnPos))
 
                         val toSend = world.chunks.filter { (it.x - spawnPos.x/16) * (it.x - spawnPos.x/16) + (it.z - spawnPos.z/16) * (it.z - spawnPos.z/16) < 8*8 }
                         toSend.map { it.toPacket() }.forEach { send(it) }
-                        println("sent ${toSend.size} chunks")
 
                         send(Pc.Server.Play.ServerChatMessage(McChat("Welcome!"), 0))
+                        send(Pc.Server.Play.PlayerListHeaderFooterPcPacket(McChat("Header"), McChat("Footer")))
 
                         send(Pc.Server.Play.PlayerTeleportPcPacket(spawnPos, 0, 1))
 
