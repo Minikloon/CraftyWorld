@@ -11,5 +11,5 @@ data class MojangProfile(
 data class ProfileProperty(
         val name: String,
         val value: String,
-        val signature: String
+        val signature: String?
 )

@@ -177,8 +177,19 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                         send(Pc.Server.Play.ServerChatMessage(McChat("Welcome!"), 0))
                         send(Pc.Server.Play.PlayerListHeaderFooterPcPacket(McChat("Header"), McChat("Footer")))
 
-                        send(Pc.Server.Play.PlayerTeleportPcPacket(spawnPos, 0, 1))
+                        server.sessions.values.forEach {
+                            it.send(Pc.Server.Play.PlayerListItemPcPacket(0, listOf(
+                                    Pc.Server.Play.PlayerListItemPcPacket.PlayerListItemAdd(
+                                            uuid = profile.uuid,
+                                            name = profile.name,
+                                            properties = profile.properties,
+                                            gamemode = 1,
+                                            ping = 30
+                                    )
+                            )))
+                        }
 
+                        send(Pc.Server.Play.PlayerTeleportPcPacket(spawnPos, 0, 1))
                     } else {
                         it.cause().printStackTrace()
                     }

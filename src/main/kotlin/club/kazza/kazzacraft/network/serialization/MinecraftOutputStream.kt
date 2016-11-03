@@ -46,10 +46,6 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         writeLong(value.leastSignificantBits)
     }
 
-    fun writeChunkSection(section: ChunkSection) {
-
-    }
-
     fun writePacket(packet: PcPacket, compressed: Boolean = false) {
         val contentStream = ByteArrayOutputStream()
         val contentMcStream = MinecraftOutputStream(contentStream)

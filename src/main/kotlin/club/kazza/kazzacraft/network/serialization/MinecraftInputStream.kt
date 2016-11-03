@@ -1,6 +1,7 @@
 package club.kazza.kazzacraft.network.serialization
 
 import club.kazza.kazzacraft.Location
+import io.vertx.core.json.Json
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
 import java.io.InputStream
@@ -29,6 +30,11 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         val bytes = ByteArray(size)
         read(bytes)
         return String(bytes)
+    }
+
+    fun <T> readJson(clazz: Class<T>) : T {
+        val json = readString()
+        return Json.decodeValue(json, clazz)
     }
 
     fun readBlockLocation() : Location {
