@@ -1,6 +1,7 @@
 package club.kazza.kazzacraft.network
 
 import club.kazza.kazzacraft.Location
+import club.kazza.kazzacraft.metadata.PlayerMetadata
 import club.kazza.kazzacraft.utils.LongPackedArray
 import club.kazza.kazzacraft.network.protocol.*
 import io.vertx.core.Handler
@@ -177,6 +178,24 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                         send(Pc.Server.Play.ServerChatMessage(McChat("Welcome!"), 0))
                         send(Pc.Server.Play.PlayerListHeaderFooterPcPacket(McChat("Header"), McChat("Footer")))
 
+                        val playerMetadata = PlayerMetadata(
+                                status = 0,
+                                air = 0,
+                                name = "",
+                                nameVisible = false,
+                                silent = false,
+                                gravity = true,
+                                handStatus = 0b01,
+                                health = 20f,
+                                potionEffectColor = 0,
+                                potionEffectAmbient = false,
+                                insertedArrows = 3,
+                                extraHearts = 0,
+                                score = 0,
+                                mainHand = 0,
+                                skinParts = 0b1111111
+                        )
+
                         server.sessions.values.forEach {
                             it.send(Pc.Server.Play.PlayerListItemPcPacket(0, listOf(
                                     Pc.Server.Play.PlayerListItemPcPacket.PlayerListItemAdd(
@@ -187,6 +206,18 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                                             ping = 30
                                     )
                             )))
+                            if(it != this) {
+                                it.send(Pc.Server.Play.SpawnPlayerPcPacket(
+                                        4,
+                                        profile.uuid,
+                                        spawnPos.x,
+                                        spawnPos.y,
+                                        spawnPos.z,
+                                        0,
+                                        0,
+                                        playerMetadata)
+                                )
+                            }
                         }
 
                         send(Pc.Server.Play.PlayerTeleportPcPacket(spawnPos, 0, 1))

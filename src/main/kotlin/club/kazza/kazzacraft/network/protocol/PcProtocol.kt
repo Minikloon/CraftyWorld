@@ -1,6 +1,7 @@
 package club.kazza.kazzacraft.network.protocol
 
 import club.kazza.kazzacraft.Location
+import club.kazza.kazzacraft.metadata.PlayerMetadata
 import club.kazza.kazzacraft.network.mojang.ProfileProperty
 import club.kazza.kazzacraft.network.serialization.MinecraftInputStream
 import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
@@ -205,6 +206,48 @@ object Pc {
             }
         }
         object Play {
+            class SpawnPlayerPcPacket(
+                    val entityId : Int,
+                    val playerUuid : UUID,
+                    val x: Double,
+                    val y: Double,
+                    val z: Double,
+                    val yaw: Byte,
+                    val pitch: Byte,
+                    val metadata: PlayerMetadata
+            ) : PcPacket() {
+                override val id = Codec.id
+                override val codec = Codec
+                companion object Codec : PcPacketCodec() {
+                    override val id = 0x05
+                    override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+                        if(obj !is SpawnPlayerPcPacket) throw IllegalArgumentException()
+                        stream.writeVarInt(obj.entityId)
+                        stream.writeUuid(obj.playerUuid)
+                        stream.writeDouble(obj.x)
+                        stream.writeDouble(obj.y)
+                        stream.writeDouble(obj.z)
+                        stream.writeByte(obj.yaw)
+                        stream.writeByte(obj.pitch)
+                        obj.metadata.writeToStream(stream)
+                    }
+                    override fun deserialize(stream: MinecraftInputStream): PcPacket {
+                        throw NotImplementedError() // TODO
+                        /*
+                        return SpawnPlayerPcPacket(
+                                entityId = stream.readVarInt(),
+                                playerUuid = stream.readUuid(),
+                                x = stream.readDouble(),
+                                y = stream.readDouble(),
+                                z = stream.readDouble(),
+                                yaw = stream.readByte(),
+                                pitch = stream.readByte(),
+                                metadata = stream.readBytes(stream.available())
+                        )
+                        */
+                    }
+                }
+            }
             class ServerDifficultyPcPacket(
                     val difficulty: Int
             ) : PcPacket() {
@@ -418,7 +461,7 @@ object Pc {
                         override val id = 0
                         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                             if(obj !is PlayerListItemAdd) throw IllegalArgumentException()
-                            stream.writeUUID(obj.uuid)
+                            stream.writeUuid(obj.uuid)
                             stream.writeString(obj.name)
                             stream.writeVarInt(obj.properties.size)
                             obj.properties.forEach {
@@ -462,7 +505,7 @@ object Pc {
                         override val id = 1
                         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                             if(obj !is PlayerListItemUpdateGamemode) throw IllegalArgumentException()
-                            stream.writeUUID(obj.uuid)
+                            stream.writeUuid(obj.uuid)
                             stream.writeVarInt(obj.gamemode)
                         }
                         override fun deserialize(stream: MinecraftInputStream): PcPacket {
@@ -483,7 +526,7 @@ object Pc {
                         override val id = 2
                         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                             if(obj !is PlayerListItemUpdateLatency) throw IllegalArgumentException()
-                            stream.writeUUID(obj.uuid)
+                            stream.writeUuid(obj.uuid)
                             stream.writeVarInt(obj.ping)
                         }
                         override fun deserialize(stream: MinecraftInputStream): PcPacket {
@@ -504,7 +547,7 @@ object Pc {
                         override val id = 3
                         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                             if(obj !is PlayerListItemUpdateDisplayName) throw IllegalArgumentException()
-                            stream.writeUUID(obj.uuid)
+                            stream.writeUuid(obj.uuid)
                             if(obj.displayName != null)
                                 stream.writeString(obj.displayName)
                         }
@@ -525,7 +568,7 @@ object Pc {
                         override val id = 4
                         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                             if(obj !is PlayerListItemRemovePlayer) throw IllegalArgumentException()
-                            stream.writeUUID(obj.uuid)
+                            stream.writeUuid(obj.uuid)
                         }
                         override fun deserialize(stream: MinecraftInputStream): PcPacket {
                             return PlayerListItemRemovePlayer(

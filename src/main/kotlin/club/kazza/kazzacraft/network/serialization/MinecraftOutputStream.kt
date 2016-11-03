@@ -23,6 +23,10 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         write(bytes.toByteArray())
     }
 
+    fun writeByte(value: Byte) {
+        writeByte(value.toInt())
+    }
+
     fun writeString(value: String) {
         val bytes = value.toByteArray(Charsets.UTF_8)
         writeVarInt(bytes.size)
@@ -41,7 +45,7 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         writeLong((x and 0x3ffffff) shl 38 or (y and 0xfff) shl 26 or z and 0x3ffffff)
     }
 
-    fun writeUUID(value: UUID) {
+    fun writeUuid(value: UUID) {
         writeLong(value.mostSignificantBits)
         writeLong(value.leastSignificantBits)
     }
