@@ -170,6 +170,8 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                         val world = server.world
                         val spawnPos = world.spawn
 
+                        loc = spawnPos
+
                         send(Pc.Server.Play.SpawnPositionPcPacket(spawnPos))
 
                         val toSend = world.chunks.filter { (it.x - spawnPos.x/16) * (it.x - spawnPos.x/16) + (it.z - spawnPos.z/16) * (it.z - spawnPos.z/16) < 8*8 }
@@ -238,6 +240,7 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
         return cipher
     }
 
+    private lateinit var loc: Location
     private fun handlePlayPacket(packet: PcPacket) {
         when (packet) {
             is Pc.Client.Play.ClientSettingsPcPacket -> {
@@ -263,6 +266,19 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
                 server.sessions.values
                         .filter { it.state == PLAY }
                         .forEach { it.send(chat) }
+            }
+            is Pc.Client.Play.ClientPlayerPositionPcPacket -> {
+                server.sessions.values.forEach {
+                    if(it != this) {
+                        it.send(Pc.Server.Play.EntityTeleportPcPacket(4, packet.x, packet.y, packet.z, 0, 0, packet.onGround))
+                    }
+                }
+            }
+            is Pc.Client.Play.ClientPlayerPosAndLookPcPacket -> {
+
+            }
+            is Pc.Client.Play.ClientPlayerLookPcPacket -> {
+
             }
             else -> {
                 println("Unhandled Play packet ${packet.javaClass.simpleName}")

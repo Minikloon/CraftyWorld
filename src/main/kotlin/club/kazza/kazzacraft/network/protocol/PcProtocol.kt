@@ -47,11 +47,14 @@ object ServerBoundPcPlayPackets : InboundPacketList() {
     override fun getCodecs() = listOf(
             Pc.Client.Play.ClientStatusPcPacket,
             Pc.Client.Play.ClientChatMessagePcPacket,
-            Pc.Client.Play.PlayerPosAndLook,
+            Pc.Client.Play.ClientPlayerPosAndLookPcPacket,
             Pc.Client.Play.ClientPluginMessagePcPacket,
             Pc.Client.Play.ClientSettingsPcPacket,
             Pc.Client.Play.PlayerTeleportConfirmPcPacket,
-            Pc.Client.Play.ClientKeepAlivePcPacket
+            Pc.Client.Play.ClientKeepAlivePcPacket,
+            Pc.Client.Play.ClientPlayerPositionPcPacket,
+            Pc.Client.Play.ClientPlayerPosAndLookPcPacket,
+            Pc.Client.Play.ClientPlayerLookPcPacket
     )
 }
 
@@ -651,6 +654,42 @@ object Pc {
                     }
                 }
             }
+            class EntityTeleportPcPacket(
+                    val entityId: Int,
+                    val x: Double,
+                    val y: Double,
+                    val z: Double,
+                    val yaw: Byte,
+                    val pitch: Byte,
+                    val onGround: Boolean
+            ) : PcPacket() {
+                override val id = Codec.id
+                override val codec = Codec
+                companion object Codec : PcPacketCodec() {
+                    override val id = 0x49
+                    override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+                        if(obj !is EntityTeleportPcPacket) throw IllegalArgumentException()
+                        stream.writeVarInt(obj.entityId)
+                        stream.writeDouble(obj.x)
+                        stream.writeDouble(obj.y)
+                        stream.writeDouble(obj.z)
+                        stream.writeByte(obj.yaw)
+                        stream.writeByte(obj.pitch)
+                        stream.writeBoolean(obj.onGround)
+                    }
+                    override fun deserialize(stream: MinecraftInputStream): PcPacket {
+                        return EntityTeleportPcPacket(
+                                entityId = stream.readVarInt(),
+                                x = stream.readDouble(),
+                                y = stream.readDouble(),
+                                z = stream.readDouble(),
+                                yaw = stream.readByte(),
+                                pitch = stream.readByte(),
+                                onGround = stream.readBoolean()
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -893,7 +932,34 @@ object Pc {
                     }
                 }
             }
-            class PlayerPosAndLook(
+            class ClientPlayerPositionPcPacket(
+                    val x: Double,
+                    val y: Double,
+                    val z: Double,
+                    val onGround: Boolean
+            ) : PcPacket() {
+                override val id = Codec.id
+                override val codec = Codec
+                companion object Codec : PcPacketCodec() {
+                    override val id = 0x0C
+                    override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+                        if(obj !is ClientPlayerPositionPcPacket) throw IllegalArgumentException()
+                        stream.writeDouble(obj.x)
+                        stream.writeDouble(obj.y)
+                        stream.writeDouble(obj.z)
+                        stream.writeBoolean(obj.onGround)
+                    }
+                    override fun deserialize(stream: MinecraftInputStream): PcPacket {
+                        return ClientPlayerPositionPcPacket(
+                                x = stream.readDouble(),
+                                y = stream.readDouble(),
+                                z = stream.readDouble(),
+                                onGround = stream.readBoolean()
+                        )
+                    }
+                }
+            }
+            class ClientPlayerPosAndLookPcPacket(
                     val x: Double,
                     val y: Double,
                     val z: Double,
@@ -906,7 +972,7 @@ object Pc {
                 companion object Codec : PcPacketCodec() {
                     override val id = 0x0D
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
-                        if(obj !is PlayerPosAndLook) throw IllegalArgumentException()
+                        if(obj !is ClientPlayerPosAndLookPcPacket) throw IllegalArgumentException()
                         stream.writeDouble(obj.x)
                         stream.writeDouble(obj.y)
                         stream.writeDouble(obj.z)
@@ -915,10 +981,34 @@ object Pc {
                         stream.writeBoolean(obj.onGround)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
-                        return PlayerPosAndLook(
+                        return ClientPlayerPosAndLookPcPacket(
                                 x = stream.readDouble(),
                                 y = stream.readDouble(),
                                 z = stream.readDouble(),
+                                yaw = stream.readFloat(),
+                                pitch = stream.readFloat(),
+                                onGround = stream.readBoolean()
+                        )
+                    }
+                }
+            }
+            class ClientPlayerLookPcPacket(
+                    val yaw: Float,
+                    val pitch: Float,
+                    val onGround: Boolean
+            ) : PcPacket() {
+                override val id = Codec.id
+                override val codec = Codec
+                companion object Codec : PcPacketCodec() {
+                    override val id = 0x0E
+                    override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+                        if(obj !is ClientPlayerLookPcPacket) throw IllegalArgumentException()
+                        stream.writeFloat(obj.yaw)
+                        stream.writeFloat(obj.pitch)
+                        stream.writeBoolean(obj.onGround)
+                    }
+                    override fun deserialize(stream: MinecraftInputStream): PcPacket {
+                        return ClientPlayerLookPcPacket(
                                 yaw = stream.readFloat(),
                                 pitch = stream.readFloat(),
                                 onGround = stream.readBoolean()
