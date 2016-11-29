@@ -11,7 +11,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.*
 
-abstract class InboundPacketList {
+abstract class InboundPcPacketList {
     protected abstract fun getCodecs() : List<PcPacket.PcPacketCodec>
     val idToCodec: Map<Int, PcPacket.PcPacketCodec>
     init {
@@ -22,13 +22,13 @@ abstract class InboundPacketList {
     }
 }
 
-object ServerBoundPcHandshakePackets : InboundPacketList() {
+object ServerBoundPcHandshakePackets : InboundPcPacketList() {
     override fun getCodecs() = listOf(
             Pc.Client.Handshake.HandshakePcPacket
     )
 }
 
-object ServerBoundPcStatusPackets : InboundPacketList() {
+object ServerBoundPcStatusPackets : InboundPcPacketList() {
     override fun getCodecs() = listOf(
             Pc.Client.Status.RequestPcPacket,
             Pc.Client.Status.PingPcPacket
@@ -36,14 +36,14 @@ object ServerBoundPcStatusPackets : InboundPacketList() {
 
 }
 
-object ServerBoundPcLoginPackets : InboundPacketList() {
+object ServerBoundPcLoginPackets : InboundPcPacketList() {
     override fun getCodecs() = listOf(
             Pc.Client.Login.LoginStartPcPacket,
             Pc.Client.Login.EncryptionResponsePcPacket
     )
 }
 
-object ServerBoundPcPlayPackets : InboundPacketList() {
+object ServerBoundPcPlayPackets : InboundPcPacketList() {
     override fun getCodecs() = listOf(
             Pc.Client.Play.ClientStatusPcPacket,
             Pc.Client.Play.ClientChatMessagePcPacket,

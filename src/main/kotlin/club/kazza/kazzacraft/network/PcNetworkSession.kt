@@ -7,7 +7,7 @@ import club.kazza.kazzacraft.network.protocol.*
 import io.vertx.core.Handler
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.net.NetSocket
-import club.kazza.kazzacraft.network.NetworkSession.State.*
+import club.kazza.kazzacraft.network.PcNetworkSession.State.*
 import club.kazza.kazzacraft.network.security.generateVerifyToken
 import club.kazza.kazzacraft.network.serialization.LengthPrefixedHandler
 import club.kazza.kazzacraft.network.serialization.MinecraftInputStream
@@ -26,7 +26,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class NetworkSession(val server: MinecraftServer, private val socket: NetSocket) {
+class PcNetworkSession(val server: PcConnectionServer, private val socket: NetSocket) {
     var state: State = HANDSHAKE
     val lastUpdate = Clock()
 
@@ -76,7 +76,7 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
 
         val packetId = reader.readVarInt()
 
-        val codec = state.packetList.idToCodec[packetId]
+        val codec = state.pcPacketList.idToCodec[packetId]
         if(codec == null) {
             println("Unknown packet id $packetId while in state $state")
             return@LengthPrefixedHandler
@@ -286,7 +286,7 @@ class NetworkSession(val server: MinecraftServer, private val socket: NetSocket)
         }
     }
 
-    enum class State(val packetList: InboundPacketList) {
+    enum class State(val pcPacketList: InboundPcPacketList) {
         HANDSHAKE(ServerBoundPcHandshakePackets),
         STATUS(ServerBoundPcStatusPackets),
         LOGIN(ServerBoundPcLoginPackets),

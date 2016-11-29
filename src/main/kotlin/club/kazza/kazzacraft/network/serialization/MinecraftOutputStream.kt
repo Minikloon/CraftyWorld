@@ -4,6 +4,7 @@ import club.kazza.kazzacraft.Location
 import club.kazza.kazzacraft.network.protocol.PcPacket
 import club.kazza.kazzacraft.world.ChunkSection
 import io.vertx.core.json.Json
+import io.vertx.core.net.SocketAddress
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.OutputStream
@@ -21,6 +22,12 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         }
         bytes.add(v.toByte())
         write(bytes.toByteArray())
+    }
+
+    fun write3BytesInt(value: Int) {
+        writeByte(value.toByte())
+        writeByte((value ushr 8).toByte())
+        writeByte((value ushr 16).toByte())
     }
 
     fun writeByte(value: Byte) {
@@ -48,6 +55,15 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
     fun writeUuid(value: UUID) {
         writeLong(value.mostSignificantBits)
         writeLong(value.leastSignificantBits)
+    }
+
+    fun writeAddress(address: SocketAddress) {
+        writeByte(4)
+        address.host()
+                .split(".")
+                .map(String::toInt)
+                .forEach { writeByte(it) }
+        writeShort(address.port())
     }
 
     fun writePacket(packet: PcPacket, compressed: Boolean = false) {

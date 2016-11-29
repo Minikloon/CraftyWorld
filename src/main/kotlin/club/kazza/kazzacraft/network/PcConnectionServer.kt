@@ -13,9 +13,9 @@ import club.kazza.kazzacraft.world.World
 import java.io.ByteArrayOutputStream
 import javax.crypto.Cipher
 
-class MinecraftServer(val port: Int, val world: World) : AbstractVerticle() {
+class PcConnectionServer(val port: Int, val world: World) : AbstractVerticle() {
     lateinit var server: NetServer
-    val sessions = mutableMapOf<NetSocket, NetworkSession>()
+    val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
 
     lateinit var mojang: MojangClient
 
@@ -39,14 +39,14 @@ class MinecraftServer(val port: Int, val world: World) : AbstractVerticle() {
 
         server = vertx.createNetServer()
         server.connectHandler() {
-            val session = NetworkSession(this, it)
+            val session = PcNetworkSession(this, it)
             sessions[it] = session
-            println("Received connection from ${it.remoteAddress()}")
+            println("Received PC connection from ${it.remoteAddress()}")
         }
         server.listen(port)
 
         vertx.setPeriodic(1000) {
-            for(session in sessions.values.filter { it.state == NetworkSession.State.PLAY })
+            for(session in sessions.values.filter { it.state == PcNetworkSession.State.PLAY })
                 session.send(Pc.Server.Play.ServerKeepAlivePcPacket(0))
         }
 

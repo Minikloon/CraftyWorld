@@ -2,6 +2,8 @@ package club.kazza.kazzacraft.network.serialization
 
 import club.kazza.kazzacraft.Location
 import io.vertx.core.json.Json
+import io.vertx.core.net.SocketAddress
+import io.vertx.core.net.impl.SocketAddressImpl
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
 import java.io.InputStream
@@ -23,6 +25,13 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         }
         value = value or ((b and 0x7F) shl (size * 7))
         return value
+    }
+
+    fun read3BytesInt() : Int {
+        val small = readUnsignedByte()
+        val middle = readUnsignedByte()
+        val big = readUnsignedByte()
+        return (big shl 16) or (middle shl 8) or small
     }
 
     fun readString() : String {
@@ -47,5 +56,12 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
 
     fun readUuid() : UUID {
         return UUID(readLong(), readLong())
+    }
+
+    fun readAddress() : SocketAddress {
+        val version = readByte().toInt()
+        val host = "${readByte()}.${readByte()}.${readByte()}.${readByte()}"
+        val port = readShort().toInt()
+        return SocketAddressImpl(port, host)
     }
 }
