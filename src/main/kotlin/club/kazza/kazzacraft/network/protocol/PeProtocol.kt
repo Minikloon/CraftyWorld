@@ -30,7 +30,9 @@ object InboundPeRaknetPackets : InboundPePacketList() {
 
 object InboundPePackets : InboundPePacketList() {
     override fun getCodecs(): List<PePacket.PePacketCodec> {
-        return listOf()
+        return listOf(
+                ConnectionRequestPePacket.Codec
+        )
     }
 }
 
@@ -54,7 +56,7 @@ abstract class PePacket {
 private val unconnectedBlabber: ByteArray = listOf(0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78).map(Int::toByte).toByteArray()
 
 class AckPePacket(
-        val ranges: List<IntRange>
+        val datagramSeqNos: List<Int>
 ) : PePacket() {
     override val id = Codec.id
     override val codec = Codec
@@ -62,7 +64,9 @@ class AckPePacket(
         override val id = 0xc0
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is AckPePacket) throw IllegalArgumentException()
-            obj.ranges.forEach {
+            val ranges = asRanges(obj.datagramSeqNos)
+            stream.writeShort(ranges.count())
+            ranges.forEach {
                 val startEqualsEnd = it.first == it.last
                 stream.writeBoolean(startEqualsEnd)
                 if(startEqualsEnd) {
@@ -81,15 +85,22 @@ class AckPePacket(
                 val startEqualsEnd = stream.readBoolean()
                 if(startEqualsEnd) {
                     val datagramSeqNo = stream.read3BytesInt()
-                    ranges[it] = datagramSeqNo..datagramSeqNo
+                    ranges.add(datagramSeqNo..datagramSeqNo)
                 }
                 else {
                     val first = stream.read3BytesInt()
                     val last = stream.read3BytesInt()
-                    ranges[it] = first..last
+                    ranges.add(first..last)
                 }
             }
-            return AckPePacket(ranges)
+            val seqNos = ranges.flatMap { it.asIterable() }
+            return AckPePacket(seqNos)
+        }
+        private fun asRanges(ints: List<Int>) : List<IntRange> {
+            var count = 0
+            return ints
+                    .groupBy { i -> count++ - i }.values
+                    .map { it.first()..it.last() }
         }
     }
 }
@@ -179,10 +190,36 @@ class OpenConnectionRequest2PePacket(
     }
 }
 
+class ConnectionRequestPePacket(
+        val uuid: Long,
+        val timestamp: Long,
+        val secured: Boolean
+) : PePacket() {
+    override val codec = Codec
+    override val id = Codec.id
+
+    object Codec : PePacketCodec() {
+        override val id = 0x09
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is ConnectionRequestPePacket) throw IllegalArgumentException()
+            stream.writeLong(obj.uuid)
+            stream.writeLong(obj.timestamp)
+            stream.writeBoolean(obj.secured)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return ConnectionRequestPePacket(
+                    uuid = stream.readLong(),
+                    timestamp = stream.readLong(),
+                    secured = stream.readBoolean()
+            )
+        }
+    }
+}
+
 class UnconnectedPongServerPePacket(
         val pingId: Long,
         val serverId: Long,
-        val serverName: String
+        val serverListData: String
 ) : PePacket() {
     override val id = Codec.id
     override val codec = Codec
@@ -194,7 +231,7 @@ class UnconnectedPongServerPePacket(
             stream.writeLong(obj.pingId)
             stream.writeLong(obj.serverId)
             stream.write(unconnectedBlabber)
-            stream.writeUTF(obj.serverName)
+            stream.writeUTF(obj.serverListData)
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
             val pingId = stream.readLong()
@@ -203,7 +240,7 @@ class UnconnectedPongServerPePacket(
             return UnconnectedPongServerPePacket(
                     pingId = pingId,
                     serverId = serverId,
-                    serverName = stream.readUTF()
+                    serverListData = stream.readUTF()
             )
         }
     }
@@ -263,6 +300,38 @@ class OpenConnectionReply2PePacket(
                     clientEndpoint = stream.readAddress(),
                     mtuSize = stream.readShort().toInt(),
                     secured = stream.readBoolean()
+            )
+        }
+    }
+}
+
+class ConnectionRequestAcceptPePacket(
+        val systemAddress: SocketAddress,
+        val systemIndex: Int,
+        val systemAddresses: Array<SocketAddress>,
+        val incommingTimestamp: Long,
+        val serverTimestamp: Long
+) : PePacket() {
+    override val codec = Codec
+    override val id = Codec.id
+
+    object Codec : PePacketCodec() {
+        override val id = 0x10
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is ConnectionRequestAcceptPePacket) throw IllegalArgumentException()
+            stream.writeAddress(obj.systemAddress)
+            stream.writeShort(obj.systemIndex)
+            obj.systemAddresses.forEach { stream.writeAddress(it) }
+            stream.writeLong(obj.incommingTimestamp)
+            stream.writeLong(obj.serverTimestamp)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return ConnectionRequestAcceptPePacket(
+                    systemAddress = stream.readAddress(),
+                    systemIndex = stream.readInt(),
+                    systemAddresses = (1..10).map { stream.readAddress() }.toTypedArray(),
+                    incommingTimestamp = stream.readLong(),
+                    serverTimestamp = stream.readLong()
             )
         }
     }

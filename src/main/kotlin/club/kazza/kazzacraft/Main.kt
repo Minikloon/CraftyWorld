@@ -1,8 +1,6 @@
 package club.kazza.kazzacraft;
 
-import club.kazza.kazzacraft.network.PcConnectionServer
 import club.kazza.kazzacraft.network.PeConnectionServer
-import club.kazza.kazzacraft.world.anvil.loadWorld
 import io.vertx.core.Vertx
 
 fun main(args: Array<String>) {
@@ -16,7 +14,7 @@ fun main(args: Array<String>) {
     //val pcServer = PcConnectionServer(25565, world)
     //vertx.deployVerticle(pcServer)
 
-    val peServer = PeConnectionServer(19134)
+    val peServer = PeConnectionServer(19132)
     vertx.deployVerticle(peServer)
 
     println("Shard running")
