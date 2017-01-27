@@ -19,6 +19,15 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
     private var datagramSeqNo: Int = 0
     private var messageSeqNo: Int = 0
     private var messageOrderIndex: Int = 0
+    private val incompleteSplits = mutableMapOf<Int, SplittedMessage>()
+
+    override fun start() {
+        vertx.setPeriodic(2500) { _ -> pruneSplits() }
+    }
+    
+    private fun pruneSplits() {
+        incompleteSplits.values.removeIf { System.currentTimeMillis() - it.timestamp > 5000L }
+    }
 
     fun handleDatagram(buffer: Buffer) {
         val mcStream = MinecraftInputStream(buffer.bytes)
@@ -63,17 +72,40 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
             val bitsLength = mcStream.readUnsignedShort()
             val messageSize = Math.ceil(bitsLength.toDouble() / 8).toInt()
 
-            if (msgHeader.reliability != RaknetReliability.RELIABLE)
-                throw NotImplementedError("Unsupported RakNet Reliability: ${msgHeader.reliability}")
-            if (msgHeader.hasSplit)
-                throw NotImplementedError("Unsupported RakNet split messages")
+            val reliability = msgHeader.reliability
+            if(reliability.reliable) {
+                val messageNo = mcStream.read3BytesInt()
+            }
+            if(reliability.sequenced) {
+                val orderIndex = mcStream.read3BytesInt()
+                val orderChannel = mcStream.readByte()
+            }
 
-            val messageNo = mcStream.read3BytesInt()
             val message = ByteArray(messageSize)
-            mcStream.read(message)
-            messages.add(message)
+            
+            val hasSplit = msgHeader.hasSplit
+            if(hasSplit) {
+                val splits = mcStream.readInt()
+                val splitsId = mcStream.readShort().toInt()
+                val splitIndex = mcStream.readInt()
+
+                mcStream.read(message)
+                
+                val splitMessage = incompleteSplits.computeIfAbsent(splitsId) { SplittedMessage(splitsId, splits) }
+                splitMessage.addSplit(splitIndex, message)
+                
+                val full = splitMessage.full
+                if(full != null) {
+                    println("Completed a split message")
+                    messages.add(full)
+                }
+            }
+            else {
+                mcStream.read(message)
+                messages.add(message)
+            }
         }
-        println("datagram with ${messages.size} messages")
+        println("datagram with ${messages.size} full message")
 
         messages.forEach { handleMessage(MinecraftInputStream(it)) }
     }
@@ -88,6 +120,13 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
 
         val message = codec.deserialize(mcStream)
         when(message) {
+            is ConnectedPingPePacket -> {
+                val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
+                sendConnected(response, RaknetReliability.UNRELIABLE)
+            }
+            is NewIncomingConnection -> {
+                println("A client at ${address.host()} is now officially connected!")
+            }
             is ConnectionRequestPePacket -> {
                 println("connected connection request...")
                 val response = ConnectionRequestAcceptPePacket(
@@ -97,7 +136,7 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
                         incommingTimestamp = message.timestamp,
                         serverTimestamp = System.currentTimeMillis()
                 )
-                sendConnected(response)
+                sendConnected(response, RaknetReliability.RELIABLE)
             }
             else -> {
                 println("Unhandled pe message ${message.javaClass.simpleName}")
@@ -162,7 +201,7 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
         socket.send(Buffer.buffer(byteStream.toByteArray()), address.port(), address.host()) {}
     }
 
-    fun sendConnected(packet: PePacket) {
+    fun sendConnected(packet: PePacket, reliability: RaknetReliability = RaknetReliability.RELIABLE_ORDERED) {
         // TODO support raknet multi-message datagram && multi-datagram message
         val byteStream = ByteArrayOutputStream()
         val mcStream = MinecraftOutputStream(byteStream)
@@ -176,10 +215,16 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
         dMcStream.writeByte(RakDatagramFlags.nonContinuousUserDatagram)
         dMcStream.write3BytesInt(datagramSeqNo++)
 
-        val messageHeader = RakMessageFlags(RaknetReliability.RELIABLE, false)
+        val messageHeader = RakMessageFlags(reliability, false)
         dMcStream.writeByte(messageHeader.header)
         dMcStream.writeShort(packetBuffer.size * 8)
-        dMcStream.write3BytesInt(messageSeqNo++)
+        
+        if(reliability.reliable)
+            dMcStream.write3BytesInt(messageSeqNo++)
+        if(reliability.sequenced) {
+            dMcStream.write3BytesInt(messageOrderIndex++)
+            dMcStream.writeByte(0) // order channel
+        }
         dMcStream.write(packetBuffer)
 
         println("${System.currentTimeMillis()} OUT connected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")

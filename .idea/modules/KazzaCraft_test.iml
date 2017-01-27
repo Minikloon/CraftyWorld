@@ -1,5 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module external.linked.project.id="KazzaCraft:test" external.linked.project.path="$MODULE_DIR$/../.." external.root.project.path="$MODULE_DIR$/../.." external.system.id="GRADLE" external.system.module.group="club.kazza" external.system.module.type="sourceSet" external.system.module.version="1.0-SNAPSHOT" type="JAVA_MODULE" version="4">
+  <component name="FacetManager">
+    <facet type="kotlin-language" name="Kotlin">
+      <configuration version="1">
+        <option name="compilerInfo">
+          <KotlinCompilerInfo>
+            <option name="compilerSettings">
+              <CompilerSettings />
+            </option>
+            <option name="k2jsCompilerArguments">
+              <K2JSCompilerArguments />
+            </option>
+            <option name="_commonCompilerArguments">
+              <DummyImpl>
+                <option name="pluginClasspaths">
+                  <array />
+                </option>
+                <option name="coroutinesWarn" value="true" />
+                <option name="pluginOptions">
+                  <array />
+                </option>
+              </DummyImpl>
+            </option>
+          </KotlinCompilerInfo>
+        </option>
+        <option name="versionInfo">
+          <KotlinVersionInfo>
+            <option name="apiLevel" value="1.1" />
+            <option name="languageLevel" value="1.1" />
+            <option name="targetPlatformName" value="JVM 1.6" />
+          </KotlinVersionInfo>
+        </option>
+      </configuration>
+    </facet>
+  </component>
   <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_1_8" inherit-compiler-output="false">
     <output-test url="file://$MODULE_DIR$/../../build/classes/test" />
     <exclude-output />
@@ -11,9 +45,9 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="KazzaCraft_main" />
-    <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-stdlib:1.1-M02" level="project" />
+    <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-stdlib:1.1.0-beta-17" level="project" />
     <orderEntry type="library" name="Gradle: io.vertx:vertx-core:3.3.3" level="project" />
-    <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-runtime:1.1-M02" level="project" />
+    <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-runtime:1.1.0-beta-17" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-common:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-buffer:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-transport:4.1.5.Final" level="project" />
@@ -25,6 +59,7 @@
     <orderEntry type="library" name="Gradle: io.netty:netty-resolver-dns:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: com.fasterxml.jackson.core:jackson-core:2.7.4" level="project" />
     <orderEntry type="library" name="Gradle: com.fasterxml.jackson.core:jackson-databind:2.7.4" level="project" />
+    <orderEntry type="library" name="Gradle: org.jetbrains:annotations:13.0" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-codec:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-codec-socks:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-codec-dns:4.1.5.Final" level="project" />
