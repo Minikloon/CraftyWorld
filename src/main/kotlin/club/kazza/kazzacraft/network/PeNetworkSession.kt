@@ -14,22 +14,37 @@ import io.vertx.core.net.SocketAddress
 import io.vertx.core.net.impl.SocketAddressImpl
 import java.io.ByteArrayOutputStream
 import java.util.*
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) : AbstractVerticle() {
+    private val receiveQueue = ConcurrentLinkedQueue<Buffer>()
     private var datagramSeqNo: Int = 0
     private var messageSeqNo: Int = 0
     private var messageOrderIndex: Int = 0
     private val incompleteSplits = mutableMapOf<Int, SplittedMessage>()
+    private var encrypted: Boolean = false
 
     override fun start() {
         vertx.setPeriodic(2500) { _ -> pruneSplits() }
+        vertx.setPeriodic(10) { _ -> handleReceiveQueue() }
     }
     
     private fun pruneSplits() {
         incompleteSplits.values.removeIf { System.currentTimeMillis() - it.timestamp > 5000L }
     }
+    
+    fun queueReceive(buffer: Buffer) {
+        receiveQueue.add(buffer)
+    }
+    
+    private fun handleReceiveQueue() {
+        while(true) {
+            val datagram = receiveQueue.poll() ?: break
+            handleDatagram(datagram)
+        }
+    }
 
-    fun handleDatagram(buffer: Buffer) {
+    private fun handleDatagram(buffer: Buffer) {
         val mcStream = MinecraftInputStream(buffer.bytes)
 
         val header = RakDatagramFlags(mcStream.readByte())
@@ -95,9 +110,12 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
                 splitMessage.addSplit(splitIndex, message)
                 
                 val full = splitMessage.full
+                val complete = splitMessage.isComplete
                 if(full != null) {
                     println("Completed a split message")
                     messages.add(full)
+                } else {
+                    println("not full yet! $splits $splitsId $splitIndex $complete")
                 }
             }
             else {
@@ -137,6 +155,18 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
                         serverTimestamp = System.currentTimeMillis()
                 )
                 sendConnected(response, RaknetReliability.RELIABLE)
+            }
+            is EncryptionWrapperPePacket -> {
+                println("wrapper!")
+                if(encrypted) {
+                    throw NotImplementedError("Encryption not supported yet!")
+                } else {
+                    val payloadStream = MinecraftInputStream(message.payload)
+                    handleMessage(payloadStream)
+                }
+            }
+            is LoginPePacket -> {
+                println("Login from $address ${message.protocolVersion} ${message.edition} ${message.payload.size}")
             }
             else -> {
                 println("Unhandled pe message ${message.javaClass.simpleName}")

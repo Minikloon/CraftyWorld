@@ -33,7 +33,9 @@ object InboundPePackets : InboundPePacketList() {
         return listOf(
                 ConnectionRequestPePacket.Codec,
                 NewIncomingConnection.Codec,
-                ConnectedPingPePacket.Codec
+                ConnectedPingPePacket.Codec,
+                EncryptionWrapperPePacket.Codec,
+                LoginPePacket.Codec
         )
     }
 }
@@ -71,6 +73,31 @@ class ConnectedPingPePacket(
         override fun deserialize(stream: MinecraftInputStream): PePacket {
             return ConnectedPingPePacket(
                     pingTimestamp = stream.readLong()
+            )
+        }
+    }
+}
+
+class LoginPePacket(
+        val protocolVersion: Int,
+        val edition: Int,
+        val payload: ByteArray // TODO: map to object
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x01
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is LoginPePacket) throw IllegalArgumentException()
+            stream.writeInt(obj.protocolVersion)
+            stream.writeByte(obj.edition)
+            stream.write(obj.payload)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return LoginPePacket(
+                    protocolVersion = stream.readInt(),
+                    edition = stream.readByte().toInt(),
+                    payload = stream.readByteArray(stream.readVarInt())
             )
         }
     }
@@ -404,6 +431,26 @@ class ConnectionRequestAcceptPePacket(
                     incommingTimestamp = stream.readLong(),
                     serverTimestamp = stream.readLong()
             )
+        }
+    }
+}
+
+class EncryptionWrapperPePacket(
+        val payload: ByteArray
+) : PePacket() {
+    override val codec = Codec
+    override val id = Codec.id
+    
+    object Codec : PePacketCodec() {
+        override val id = 0xFE
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is EncryptionWrapperPePacket) throw IllegalArgumentException()
+            stream.write(obj.payload)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            val bytes = ByteArray(stream.available())
+            stream.read(bytes)
+            return EncryptionWrapperPePacket(bytes)
         }
     }
 }

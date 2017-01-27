@@ -33,6 +33,12 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         val big = readUnsignedByte()
         return (big shl 16) or (middle shl 8) or small
     }
+    
+    fun readByteArray(count: Int) : ByteArray {
+        val bytes = ByteArray(count)
+        read(bytes)
+        return bytes
+    }
 
     fun readString() : String {
         val size = readVarInt()

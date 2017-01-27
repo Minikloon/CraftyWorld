@@ -2,6 +2,7 @@ package club.kazza.kazzacraft.network
 
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.datagram.DatagramSocket
+import io.vertx.core.impl.ContextImpl
 import io.vertx.core.net.SocketAddress
 import java.util.concurrent.CompletableFuture
 
@@ -28,9 +29,7 @@ class PeConnectionServer(val port: Int) : AbstractVerticle() {
                     }
                     getSession.thenAcceptAsync {
                         val session = it
-                        session.vertx.runOnContext {
-                            session.handleDatagram(data)
-                        }
+                        session.queueReceive(data)
                     }
                 }
             } else {
