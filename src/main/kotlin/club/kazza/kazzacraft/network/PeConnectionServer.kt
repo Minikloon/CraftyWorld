@@ -29,7 +29,7 @@ class PeConnectionServer(val port: Int) : AbstractVerticle() {
                     }
                     getSession.thenAcceptAsync {
                         val session = it
-                        session.queueReceive(data)
+                        session.queueDatagramReceive(data)
                     }
                 }
             } else {

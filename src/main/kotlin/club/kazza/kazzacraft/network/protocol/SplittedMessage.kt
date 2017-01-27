@@ -1,9 +1,11 @@
 package club.kazza.kazzacraft.network.protocol
 
+import club.kazza.kazzacraft.network.raknet.RakMessage
+import club.kazza.kazzacraft.network.raknet.RakMessageFlags
 import club.kazza.kazzacraft.utils.kotlin.lazyIf
 
-class SplittedMessage(val id: Int, splits: Int, val timestamp: Long = System.currentTimeMillis()) {
-    private val parts: Array<ByteArray?> = Array(splits) { null }
+class SplittedMessage(val id: Short, splits: Int, val timestamp: Long = System.currentTimeMillis()) {
+    private val parts: Array<RakMessage?> = Array(splits) { null }
 
     val isComplete: Boolean
         get() = {
@@ -12,21 +14,24 @@ class SplittedMessage(val id: Int, splits: Int, val timestamp: Long = System.cur
         }.invoke()
 
     // returns null if isComplete == false 
-    val full: ByteArray? by lazyIf(
+    val full: RakMessage? by lazyIf(
             condition = { isComplete },
             otherwise = { null },
             initializer = {
-                val combined = ByteArray(parts.sumBy { it!!.size })
+                val combinedData = ByteArray(parts.sumBy { it!!.data.size })
                 var index = 0
                 parts.forEach {
-                    System.arraycopy(it, 0, combined, index, it!!.size)
-                    index += it.size
+                    val data = it!!.data
+                    System.arraycopy(data, 0, combinedData, index, data.size)
+                    index += data.size
                 }
-                combined
+                val last = parts.last() as RakMessage
+                val header = RakMessageFlags(last.headerFlags.reliability, false)
+                RakMessage(header, last.reliability, last.order, null, combinedData)
             }
     )
 
-    fun addSplit(index: Int, data: ByteArray) {
-        parts[index] = data
+    fun addSplit(index: Int, split: RakMessage) {
+        parts[index] = split
     }
 }

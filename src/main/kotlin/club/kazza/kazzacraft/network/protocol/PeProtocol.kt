@@ -40,6 +40,11 @@ object InboundPePackets : InboundPePacketList() {
     }
 }
 
+interface PeCodec<T> {
+    fun serialize(obj: T, stream: MinecraftOutputStream)
+    fun deserialize(stream: MinecraftInputStream) : T
+}
+
 abstract class PePacket {
     abstract val id: Int
     abstract val codec: PePacketCodec

@@ -39,6 +39,12 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         read(bytes)
         return bytes
     }
+    
+    fun readRemainingBytes() : ByteArray {
+        if(`in` !is ByteArrayInputStream) 
+            throw NotImplementedError("readRemainingBytes only available for ByteArrayInputStream")
+        return readByteArray(available())
+    }
 
     fun readString() : String {
         val size = readVarInt()

@@ -1,6 +1,6 @@
 package club.kazza.kazzacraft.network.raknet
 
-enum class RaknetReliability(val id: Int, val reliable: Boolean, val sequenced: Boolean) {
+enum class RakMessageReliability(val id: Int, val reliable: Boolean, val ordered: Boolean) {
     UNRELIABLE(0, false, false),
     UNRELIABLE_SEQUENCED(1, false, true),
     RELIABLE(2, true, false),
