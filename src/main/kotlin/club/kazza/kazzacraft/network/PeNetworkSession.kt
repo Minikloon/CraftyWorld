@@ -3,6 +3,7 @@ package club.kazza.kazzacraft.network
 import club.kazza.kazzacraft.network.protocol.*
 import club.kazza.kazzacraft.network.raknet.*
 import club.kazza.kazzacraft.network.raknet.RakMessageReliability.*
+import club.kazza.kazzacraft.network.security.isCertChainValid
 import club.kazza.kazzacraft.network.serialization.MinecraftInputStream
 import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
 import club.kazza.kazzacraft.utils.toHexStr
@@ -12,6 +13,8 @@ import io.vertx.core.datagram.DatagramSocket
 import io.vertx.core.net.SocketAddress
 import io.vertx.core.net.impl.SocketAddressImpl
 import java.io.ByteArrayOutputStream
+import java.security.KeyFactory
+import java.security.spec.X509EncodedKeySpec
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -27,7 +30,7 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
     override fun start() {
         vertx.setPeriodic(2500) { _ -> pruneSplittedDatagrams() }
         vertx.setPeriodic(10) { _ -> processDatagramReceiveQueue() }
-        vertx.setPeriodic(50) { _ -> processOrderingChannels() }
+        vertx.setPeriodic(25) { _ -> processOrderingChannels() }
     }
     
     private fun pruneSplittedDatagrams() {
@@ -60,7 +63,7 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
             else {
                 val datagramSeqNo = mcStream.read3BytesInt()
                 val datagram = RakConnectedDatagram(headerFlags, datagramSeqNo, Buffer.buffer(mcStream.readRemainingBytes()))
-                decodeConnectedDatagram(datagram)
+                processConnectedDatagram(datagram)
             }
         }
         else {
@@ -81,7 +84,7 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
 
     private val supportedReliabilities = setOf(RELIABLE, RELIABLE_ORDERED, UNRELIABLE)
     
-    private fun decodeConnectedDatagram(datagram: RakConnectedDatagram) {
+    private fun processConnectedDatagram(datagram: RakConnectedDatagram) {
         val mcStream = datagram.dataAsStream
         
         queueAck(datagram.sequenceNumber)
@@ -171,7 +174,11 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
                 }
             }
             is LoginPePacket -> {
-                println("Login from $address ${message.protocolVersion} ${message.edition} ${message.payload.size}")
+                val chain = message.certChain
+                val rootCert = if(chain[0].payload.iss == "RealmsAuthorization") mojangPubKey else null
+                if(! isCertChainValid(chain, rootCert))
+                    throw NotImplementedError("Should do something about invalid cert chain")
+                println("Login from $address ${message.protocolVersion} ${message.edition}")
             }
             else -> {
                 println("Unhandled pe message ${message.javaClass.simpleName}")
@@ -261,5 +268,11 @@ class PeNetworkSession(val socket: DatagramSocket, val address: SocketAddress) :
 
         println("${System.currentTimeMillis()} OUT connected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
         socket.send(Buffer.buffer(dByteStream.toByteArray()), address.port(), address.host()) {}
+    }
+    
+    companion object {
+        private val mojangPubKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(
+                "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE8ELkixyLcwlZryUQcu1TvPOmI2B7vX83ndnWRUaXm74wFfa5f/lwQNTfrLVHa2PmenpGI6JhIMUJaWZrjmMj90NoKNFSNBuKdm8rYiXsfaz3K36x/1U26HpG0ZxK/V1V"
+        )))
     }
 }

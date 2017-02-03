@@ -1,7 +1,12 @@
 package club.kazza.kazzacraft.network.protocol
 
+import club.kazza.kazzacraft.network.protocol.jwt.PeJwt
 import club.kazza.kazzacraft.network.serialization.MinecraftInputStream
 import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
+import club.kazza.kazzacraft.utils.CompressionAlgorithm
+import club.kazza.kazzacraft.utils.compress
+import club.kazza.kazzacraft.utils.decompress
+import io.vertx.core.json.JsonObject
 import io.vertx.core.net.SocketAddress
 import java.io.InputStream
 import java.io.OutputStream
@@ -86,7 +91,8 @@ class ConnectedPingPePacket(
 class LoginPePacket(
         val protocolVersion: Int,
         val edition: Int,
-        val payload: ByteArray // TODO: map to object
+        val certChain: List<PeJwt>,
+        val skinJwt: String
 ) : PePacket() {
     override val id = Codec.id
     override val codec = Codec
@@ -96,13 +102,30 @@ class LoginPePacket(
             if(obj !is LoginPePacket) throw IllegalArgumentException()
             stream.writeInt(obj.protocolVersion)
             stream.writeByte(obj.edition)
-            stream.write(obj.payload)
+            val payload = obj.certChain.toString().toByteArray() + obj.skinJwt.toString().toByteArray()
+            stream.write(payload.compress(CompressionAlgorithm.ZLIB))
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
+            val protocolVersion = stream.readInt()
+            val edition = stream.readByte().toInt()
+            
+            val payloadSize = stream.readVarInt()
+            val zlibedPayload = stream.readRemainingBytes()
+            
+            val payload = zlibedPayload.decompress(CompressionAlgorithm.ZLIB, payloadSize)
+            val pStream = MinecraftInputStream(payload)
+            
+            val chainStr = pStream.readString(pStream.readIntLe())
+            val chainJson = JsonObject(chainStr)
+            val certChain = chainJson.getJsonArray("chain").map { PeJwt.parse(it as String) }
+            
+            val skinJwt = pStream.readString(pStream.readIntLe())
+            
             return LoginPePacket(
-                    protocolVersion = stream.readInt(),
-                    edition = stream.readByte().toInt(),
-                    payload = stream.readByteArray(stream.readVarInt())
+                    protocolVersion = protocolVersion,
+                    edition = edition,
+                    certChain = certChain,
+                    skinJwt = skinJwt
             )
         }
     }

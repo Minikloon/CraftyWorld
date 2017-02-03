@@ -1,8 +1,10 @@
 package club.kazza.kazzacraft.network
 
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.datagram.DatagramSocket
 import io.vertx.core.impl.ContextImpl
+import io.vertx.core.json.Json
 import io.vertx.core.net.SocketAddress
 import java.util.concurrent.CompletableFuture
 
@@ -11,6 +13,9 @@ class PeConnectionServer(val port: Int) : AbstractVerticle() {
     val sessions: MutableMap<SocketAddress, CompletableFuture<PeNetworkSession>> = mutableMapOf()
 
     override fun start() {
+        Json.mapper.registerKotlinModule()
+        Json.mapper.deserializationConfig
+        
         socket = vertx.createDatagramSocket()
         socket.listen(port, "0.0.0.0") {
             if(it.succeeded()) {

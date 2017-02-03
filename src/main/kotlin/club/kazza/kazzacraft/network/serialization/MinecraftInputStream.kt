@@ -26,6 +26,14 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         value = value or ((b and 0x7F) shl (size * 7))
         return value
     }
+    
+    fun readIntLe() : Int {
+        val b1 = read()
+        val b2 = read()
+        val b3 = read()
+        val b4 = read()
+        return (b4 shl 24) or (b3 shl 16) or (b2 shl 8) or (b1 shl 0)
+    }
 
     fun read3BytesInt() : Int {
         val small = readUnsignedByte()
@@ -46,8 +54,8 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         return readByteArray(available())
     }
 
-    fun readString() : String {
-        val size = readVarInt()
+    fun readString(length: Int = -1) : String {
+        val size = if(length == -1) readVarInt() else length
         val bytes = ByteArray(size)
         read(bytes)
         return String(bytes)
