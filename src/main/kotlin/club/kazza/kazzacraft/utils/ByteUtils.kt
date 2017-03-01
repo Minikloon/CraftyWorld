@@ -17,3 +17,12 @@ fun Int.toHexStr() : String {
     val char1 = HEX_CHARS[i shr 4 and 0x000f]
     return "0x$char4$char3$char2$char1"
 }
+
+fun Long.toBytes() : ByteArray {
+    return byteArrayOf(
+            ((this ushr 12) and 0xFF).toByte(),
+            ((this ushr 8) and 0xFF).toByte(),
+            ((this ushr 4) and 0xFF).toByte(),
+            (this and 0xFF).toByte()
+    )
+}

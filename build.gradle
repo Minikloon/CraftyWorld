@@ -2,7 +2,7 @@ group 'club.kazza'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.1.0-beta-17'
+    ext.kotlin_version = '1.1.0-rc-91'
 
     repositories {
         mavenCentral()

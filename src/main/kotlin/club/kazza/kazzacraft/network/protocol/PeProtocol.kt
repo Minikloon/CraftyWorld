@@ -8,9 +8,15 @@ import club.kazza.kazzacraft.utils.compress
 import club.kazza.kazzacraft.utils.decompress
 import io.vertx.core.json.JsonObject
 import io.vertx.core.net.SocketAddress
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.security.KeyFactory
+import java.security.PublicKey
+import java.security.spec.X509EncodedKeySpec
 import java.util.*
+import java.util.zip.Deflater
+import java.util.zip.Inflater
 
 abstract class InboundPePacketList {
     protected abstract fun getCodecs() : List<PePacket.PePacketCodec>
@@ -23,7 +29,7 @@ abstract class InboundPePacketList {
     }
 }
 
-object InboundPeRaknetPackets : InboundPePacketList() {
+object ServerBoundPeRaknetPackets : InboundPePacketList() {
     override fun getCodecs(): List<PePacket.PePacketCodec> {
         return listOf(
                 UnconnectedPingClientPePacket.Codec,
@@ -33,7 +39,7 @@ object InboundPeRaknetPackets : InboundPePacketList() {
     }
 }
 
-object InboundPePackets : InboundPePacketList() {
+object ServerBoundPePackets : InboundPePacketList() {
     override fun getCodecs(): List<PePacket.PePacketCodec> {
         return listOf(
                 ConnectionRequestPePacket.Codec,
@@ -57,6 +63,13 @@ abstract class PePacket {
     fun serialize(stream: OutputStream) {
         val mcStream = MinecraftOutputStream(stream)
         codec.serialize(this, mcStream)
+    }
+    
+    fun serialized() : ByteArray {
+        val bs = ByteArrayOutputStream()
+        val mcStream = MinecraftOutputStream(bs)
+        serialize(mcStream)
+        return bs.toByteArray()
     }
 
     abstract class PePacketCodec {
@@ -131,6 +144,26 @@ class LoginPePacket(
     }
 }
 
+enum class PlayerStatus { LOGIN_ACCEPTED, UNKNOWN, SPAWN }
+class PlayerStatusPePacket(
+        val status: PlayerStatus
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x02
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is PlayerStatusPePacket) throw IllegalStateException()
+            stream.writeInt(obj.status.ordinal)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return PlayerStatusPePacket(
+                    status = PlayerStatus.values()[stream.readInt()]
+            )
+        }
+    }
+}
+
 class ConnectedPongPePacket(
         val pingTimestamp: Long,
         val pongTimestamp: Long
@@ -148,6 +181,53 @@ class ConnectedPongPePacket(
             return ConnectedPongPePacket(
                     pingTimestamp = stream.readLong(),
                     pongTimestamp = stream.readLong()
+            )
+        }
+    }
+}
+
+class ResourcePackInfo(
+        val id: String,
+        val version: String,
+        val unknown: Long
+) {
+    object Codec : PeCodec<ResourcePackInfo> {
+        override fun serialize(obj: ResourcePackInfo, stream: MinecraftOutputStream) {
+            stream.writeString(obj.id)
+            stream.writeString(obj.version)
+            stream.writeLong(obj.unknown)
+        }
+        override fun deserialize(stream: MinecraftInputStream): ResourcePackInfo {
+            return ResourcePackInfo(
+                    id = stream.readString(),
+                    version = stream.readString(),
+                    unknown = stream.readLong()
+            )
+        }
+    }
+}
+class ResourcePackTriggerPePacket(
+        val mustAccept: Boolean,
+        val behaviors: List<ResourcePackInfo>,
+        val resources: List<ResourcePackInfo>
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x07
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is ResourcePackTriggerPePacket) throw IllegalArgumentException()
+            stream.writeBoolean(obj.mustAccept)
+            stream.writeShort(obj.behaviors.size)
+            obj.behaviors.forEach { ResourcePackInfo.Codec.serialize(it, stream) }
+            stream.writeShort(obj.resources.size)
+            obj.resources.forEach { ResourcePackInfo.Codec.serialize(it, stream) }
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return ResourcePackTriggerPePacket(
+                    mustAccept = stream.readBoolean(),
+                    behaviors = (1..stream.readShort()).map { ResourcePackInfo.Codec.deserialize(stream) },
+                    resources = (1..stream.readShort()).map { ResourcePackInfo.Codec.deserialize(stream) }
             )
         }
     }
@@ -240,7 +320,6 @@ class UnconnectedPingClientPePacket(
 
     object Codec : PePacketCodec() {
         override val id = 0x01
-
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is UnconnectedPingClientPePacket) throw IllegalArgumentException()
             stream.writeLong(obj.pingId)
@@ -253,6 +332,32 @@ class UnconnectedPingClientPePacket(
             return UnconnectedPingClientPePacket(
                     pingId = pingId,
                     uuid = stream.readLong()
+            )
+        }
+    }
+}
+
+class ServerToClientHandshakePePacket(
+        val serverKey: PublicKey,
+        val token: ByteArray
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    
+    object Codec : PePacketCodec() {
+        override val id = 0x03
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is ServerToClientHandshakePePacket) throw IllegalArgumentException()
+            val base64Key = Base64.getEncoder().encode(obj.serverKey.encoded)
+            stream.writeInt(base64Key.size)
+            stream.write(base64Key)
+            stream.write(obj.token)
+        }
+        val keyFactory = KeyFactory.getInstance("EC")
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return ServerToClientHandshakePePacket(
+                    serverKey = keyFactory.generatePublic(X509EncodedKeySpec(stream.readByteArray(stream.readInt()))),
+                    token = stream.readByteArray(stream.readInt())
             )
         }
     }
@@ -372,6 +477,68 @@ class UnconnectedPongServerPePacket(
     }
 }
 
+class CompressionWrapperPePacket(
+        vararg val packets: PePacket
+) : PePacket() {    
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x06
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is CompressionWrapperPePacket) throw IllegalArgumentException()
+            val bs = ByteArrayOutputStream()
+            val mcStream = MinecraftOutputStream(bs)
+            obj.packets.forEach {
+                val serialized = it.serialized()
+                mcStream.writeVarInt(serialized.size + 1) // 1 for packet id
+                mcStream.writeByte(it.id)
+                mcStream.write(serialized)
+            }
+            val rawBytes = bs.toByteArray()
+            val deflater = Deflater()
+            deflater.setInput(rawBytes)
+            deflater.finish()
+            val compressed = ByteArray(rawBytes.size)
+            val compressedSize = deflater.deflate(compressed)
+            stream.writeVarInt(compressedSize)
+            stream.write(compressed, 0, compressedSize)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            val compressedSize = stream.readVarInt()
+            if(compressedSize > 500_000) throw IllegalStateException("client tried to create a huge CompressionWrapper of $compressedSize bytes")
+            val compressed = stream.readByteArray(compressedSize)
+            
+            val inflater = Inflater()
+            inflater.setInput(compressed)
+            
+            val bs = ByteArrayOutputStream()
+            while(! inflater.finished()) {
+                val buffer = ByteArray(64)
+                val size = inflater.inflate(buffer)
+                bs.write(buffer, 0, size)
+            }
+            
+            val packets = mutableListOf<PePacket>()
+            val codecMap = ServerBoundPePackets.idToCodec // TODO: use clientbound + serverbound list
+            
+            val decompressed = bs.toByteArray()
+            val decompressedStream = MinecraftInputStream(decompressed)
+            while(decompressedStream.available() != 0) {
+                val size = decompressedStream.readVarInt()
+                val bytes = decompressedStream.readByteArray(size)
+                val packetStream = MinecraftInputStream(bytes)
+                val id = packetStream.readByte()
+                val codec = codecMap[id.toInt()] ?: throw IllegalStateException("Unknown pe message in compression wrapper $id")
+                val packet = codec.deserialize(packetStream)
+                packets.add(packet)
+            }
+            return CompressionWrapperPePacket(
+                    packets = *packets.toTypedArray()
+            )
+        }
+    }
+}
+
 class OpenConnectionReply1PePacket(
         val serverId: Long,
         val secured: Boolean,
@@ -379,7 +546,6 @@ class OpenConnectionReply1PePacket(
 ) : PePacket() {
     override val id = Codec.id
     override val codec = Codec
-
     object Codec : PePacketCodec() {
         override val id = 0x06
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {

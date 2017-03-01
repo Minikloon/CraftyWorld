@@ -3,6 +3,7 @@ package club.kazza.kazzacraft.network.security
 import club.kazza.kazzacraft.network.protocol.jwt.PeJwt
 import java.security.KeyFactory
 import java.security.PublicKey
+import java.security.SecureRandom
 import java.security.spec.X509EncodedKeySpec
 import java.util.*
 
@@ -81,4 +82,11 @@ fun transcodeSignatureToDER(jwsSignature: ByteArray): ByteArray {
     System.arraycopy(jwsSignature, 2 * rawLen - k, derSignature, offset + l - k, k)
 
     return derSignature
+}
+
+private val rand = SecureRandom()
+fun generateBytes(size: Int) : ByteArray {
+    val bytes = ByteArray(size)
+    rand.nextBytes(bytes)
+    return bytes
 }
