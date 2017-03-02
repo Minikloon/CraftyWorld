@@ -18,11 +18,16 @@ fun main(args: Array<String>) {
     //val pcServer = PcConnectionServer(25565, world)
     //vertx.deployVerticle(pcServer)
 
-    //val peServer = PeConnectionServer(19132)
-    //vertx.deployVerticle(peServer)
+    val peServer = PeConnectionServer(19132)
+    vertx.deployVerticle(peServer)
+    
+    //testDecompress()
+    
+    println("Shard running")
+}
 
-    /*
-    val bytes = "78 DA 63 E1 64 66 60 00 00 00 46 00 11"
+fun testDecompress() {
+    val bytes = "78 9C 63 65 62 00 02 36 76 10 C9 00 00"
             .split(" ")
             .map { Integer.parseInt(it, 16).toByte() }
     val decompress = { bytes: List<Byte> ->
@@ -33,7 +38,4 @@ fun main(args: Array<String>) {
         output.copyOfRange(0, size)
     }
     println(decompress(bytes).map(Byte::toHexStr).joinToString())
-    */
-
-    println("Shard running")
 }

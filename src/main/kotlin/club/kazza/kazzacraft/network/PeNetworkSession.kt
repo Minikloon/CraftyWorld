@@ -47,20 +47,17 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
     private val incompleteSplits = mutableMapOf<Short, SplittedMessage>()
     private val orderingChannels = mutableMapOf<Byte, OrderingChannel>()
     
+    private val ackQueue = mutableListOf<Int>()
+    
     override fun start() {
         vertx.setPeriodic(2500) { _ -> pruneSplittedDatagrams() }
-        vertx.setPeriodic(1800) { _ -> sendPreemptivePong() }
         vertx.setPeriodic(10) { _ -> processDatagramReceiveQueue() }
         vertx.setPeriodic(25) { _ -> processOrderingChannels() }
+        vertx.setPeriodic(10) { _ -> flushAckQueue() }
     }
     
     private fun pruneSplittedDatagrams() {
         incompleteSplits.values.removeIf { System.currentTimeMillis() - it.timestamp > 5000L }
-    }
-    
-    private fun sendPreemptivePong() {
-        if(!loggedIn) return
-        sendConnected(ConnectedPongPePacket(System.currentTimeMillis(), System.currentTimeMillis()))
     }
     
     fun queueDatagramReceive(buffer: Buffer) {
@@ -175,7 +172,7 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         when(message) {
             is ConnectedPingPePacket -> {
                 val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
-                sendConnected(response, UNRELIABLE)
+                sendConnected(response, UNRELIABLE, false)
             }
             is NewIncomingConnection -> {
                 println("A client at ${address.host()} is now officially connected!")
@@ -239,7 +236,6 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                 }
                 else {
                     loggedIn = true
-                    sendPreemptivePong()
                     val wrapper = CompressionWrapperPePacket(
                             PlayerStatusPePacket(PlayerStatus.LOGIN_ACCEPTED),
                             ResourcePackTriggerPePacket(false, listOf(), listOf())
@@ -298,8 +294,14 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
     }
 
     fun queueAck(seqNo: Int) {
-        val ack = AckPePacket(listOf(seqNo)) // TODO: merge acks over a few ms to save bandwidth
+        ackQueue.add(seqNo)
+    }
+    
+    fun flushAckQueue() {
+        if(ackQueue.isEmpty()) return
+        val ack = AckPePacket(ackQueue)
         sendUnconnected(ack)
+        ackQueue.clear()
     }
 
     fun sendUnconnected(packet: PePacket) {
@@ -312,11 +314,11 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         socket.send(Buffer.buffer(byteStream.toByteArray()), address.port(), address.host()) {}
     }
 
-    fun sendConnected(packet: PePacket, reliability: RakMessageReliability = RELIABLE_ORDERED) {
+    fun sendConnected(packet: PePacket, reliability: RakMessageReliability = RELIABLE_ORDERED, encryptionWrap: Boolean = true) {
         // TODO support raknet multi-message datagram && multi-datagram message
         val byteStream = ByteArrayOutputStream()
         val mcStream = MinecraftOutputStream(byteStream)
-        if(loggedIn)
+        if(loggedIn && encryptionWrap)
             mcStream.writeByte(EncryptionWrapperPePacket.Codec.id)
         mcStream.writeByte(packet.id)
         packet.serialize(mcStream)
