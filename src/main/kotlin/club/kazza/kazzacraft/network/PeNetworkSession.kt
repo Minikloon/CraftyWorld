@@ -98,7 +98,7 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
     private fun handleRakAcknowledge(mcStream: MinecraftInputStream) {
         val ack = AckPePacket.Codec.deserialize(mcStream) as AckPePacket
         val ackedCount = ack.datagramSeqNos.count()
-        println("ack $ackedCount datagrams")
+        // println("ack $ackedCount datagrams") TODO: handle acks & resends
     }
 
     private fun handleRakNotAcknowledge(mcStream: MinecraftInputStream) {
@@ -137,7 +137,6 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                 messages.add(message)
             }
         }
-        println("datagram with ${messages.size} full message")
 
         messages.forEach {
             if(it.headerFlags.reliability.ordered) {
@@ -148,7 +147,7 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                 orderChannel.add(it)
             }
             else {
-                handlePeMessage(it.dataAsStream)
+                handlePePayload(it.dataAsStream)
             }
         }
     }
@@ -156,19 +155,23 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
     fun processOrderingChannels() {
         orderingChannels.values.forEach { 
             val message = it.poll() ?: return@forEach
-            handlePeMessage(message.dataAsStream)
+            handlePePayload(message.dataAsStream)
         }
     }
-
-    private fun handlePeMessage(mcStream: MinecraftInputStream) {
+    
+    private fun handlePePayload(mcStream: MinecraftInputStream) {
         val id = mcStream.read()
-        val codec = ServerBoundPePackets.idToCodec[id]
+        val codec = ServerBoundPeTopLevelPackets.idToCodec[id]
         if(codec == null) {
             println("Unknown pe message id $id")
             return
         }
-
         val message = codec.deserialize(mcStream)
+        handlePeMessage(message)
+    }
+
+    private fun handlePeMessage(message: PePacket) {
+        println("${System.currentTimeMillis()} HANDLE ${message::class.java.simpleName}")
         when(message) {
             is ConnectedPingPePacket -> {
                 val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
@@ -189,15 +192,19 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                 sendConnected(response, RELIABLE)
             }
             is EncryptionWrapperPePacket -> {
-                println("wrapper!")
+                println("encryption wrapper!")
                 if(encrypted) {
                     throw NotImplementedError("Encryption not supported yet!")
                 } else {
                     val payloadStream = MinecraftInputStream(message.payload)
-                    handlePeMessage(payloadStream)
+                    handlePePayload(payloadStream)
                     if(payloadStream.available() != 0)
                         throw IllegalStateException("at least ${payloadStream.available()} remaining in an encryption wrapper")
                 }
+            }
+            is CompressionWrapperPePacket -> {
+                println("compression wrapper with ${message.packets.size} messages!")
+                message.packets.forEach { handlePeMessage(it) }
             }
             is LoginPePacket -> {
                 val chain = message.certChain
@@ -243,7 +250,18 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                     sendConnected(wrapper)
                     println("Login from $address ${message.protocolVersion} ${message.edition}")
                 }
-                
+            }
+            is ResourcePackClientResponsePePacket -> {
+                println("resource pack response status: ${message.status}")
+                when(message.status) {
+                    ResourcePackClientStatus.REQUEST_DATA -> {
+                        val data = ResourcePackDataPePacket(false, listOf(), listOf())
+                        sendConnected(data)
+                    }
+                    else -> {
+                        println("unhandled resource pack status ${message.status}")
+                    }
+                }
             }
             else -> {
                 println("Unhandled pe message ${message.javaClass.simpleName}")
@@ -266,7 +284,6 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
     private fun handleUnconnectedPacket(packet: PePacket) {
         when(packet) {
             is UnconnectedPingClientPePacket -> {
-                println("unconnected ping from $address")
                 val serverId = address.hashCode().toLong()
                 val color = if(count % 2 == 0) "§c" else "§4"
                 val motdFirstLine = "$color❤ §a§lHELLO WORLD $color❤"
@@ -310,7 +327,8 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         mcStream.writeByte(packet.id)
         packet.serialize(mcStream)
         
-        println("${System.currentTimeMillis()} OUT unconnected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
+        if(packet !is AckPePacket && packet !is UnconnectedPongServerPePacket)
+            println("${System.currentTimeMillis()} OUT unconnected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
         socket.send(Buffer.buffer(byteStream.toByteArray()), address.port(), address.host()) {}
     }
 
@@ -339,7 +357,8 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         )
         message.serialize(dMcStream)
 
-        println("${System.currentTimeMillis()} OUT connected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
+        if(packet !is ConnectedPongPePacket)
+            println("${System.currentTimeMillis()} OUT connected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
         socket.send(Buffer.buffer(dByteStream.toByteArray()), address.port(), address.host()) {}
     }
     

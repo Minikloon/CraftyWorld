@@ -1,6 +1,8 @@
 package club.kazza.kazzacraft;
 
 import club.kazza.kazzacraft.network.PeConnectionServer
+import club.kazza.kazzacraft.utils.CompressionAlgorithm
+import club.kazza.kazzacraft.utils.decompress
 import club.kazza.kazzacraft.utils.toHexStr
 import club.kazza.kazzacraft.world.anvil.loadWorld
 import io.vertx.core.Vertx
@@ -27,7 +29,11 @@ fun main(args: Array<String>) {
 }
 
 fun testDecompress() {
-    val bytes = "78 9C 63 65 62 00 02 36 76 10 C9 00 00"
+    println(decompressParse("78 DA 63 E1 64 61 60 00 00 00 49 00 12"))
+}
+
+fun decompressParse(str: String) : String {
+    val bytes = str
             .split(" ")
             .map { Integer.parseInt(it, 16).toByte() }
     val decompress = { bytes: List<Byte> ->
@@ -37,5 +43,5 @@ fun testDecompress() {
         val size = inflater.inflate(output)
         output.copyOfRange(0, size)
     }
-    println(decompress(bytes).map(Byte::toHexStr).joinToString())
+    return decompress(bytes).map(Byte::toHexStr).joinToString()
 }

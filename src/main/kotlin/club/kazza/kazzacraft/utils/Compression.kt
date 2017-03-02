@@ -1,25 +1,38 @@
 package club.kazza.kazzacraft.utils
 
+import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 
-private val inflaterLocal = ThreadLocal.withInitial { Inflater() }
-private val deflaterLocal = ThreadLocal.withInitial { Deflater() }
-
-fun ByteArray.decompress(algo: CompressionAlgorithm, expectedSize: Int) : ByteArray {    
-    val inflater = inflaterLocal.get()
+fun ByteArray.decompress(algo: CompressionAlgorithm, expectedSize: Int = 0) : ByteArray {    
+    val inflater = Inflater()
     inflater.setInput(this)
-    val output = ByteArray(expectedSize)
-    inflater.inflate(output)
-    return output
+    
+    val bufferSize = (if(expectedSize == 0) size else expectedSize) + 32
+    
+    val bs = ByteArrayOutputStream(bufferSize)
+    while(! inflater.finished()) {
+        val buffer = ByteArray(bufferSize)
+        val decompressedSize = inflater.inflate(buffer)
+        bs.write(buffer, 0, decompressedSize)
+    }
+    return bs.toByteArray()
 }
 
 fun ByteArray.compress(algo: CompressionAlgorithm) : ByteArray {
-    val deflater = deflaterLocal.get()
+    val deflater = Deflater()
     deflater.setInput(this)
-    val output = ByteArray(this.size)
-    val compressedSize = deflater.deflate(output)
-    return output.sliceArray(0 until compressedSize)
+    deflater.finish()
+    
+    val bufferSize = size + 32
+    
+    val bs = ByteArrayOutputStream(bufferSize)
+    while(! deflater.finished()) {
+        val buffer = ByteArray(bufferSize)
+        val compressedSize = deflater.deflate(buffer)
+        bs.write(buffer, 0, compressedSize)
+    }
+    return bs.toByteArray()
 }
 
 enum class CompressionAlgorithm {
