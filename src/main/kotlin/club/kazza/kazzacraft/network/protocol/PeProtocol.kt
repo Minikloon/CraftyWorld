@@ -81,6 +81,14 @@ abstract class PePacket {
         serialize(mcStream)
         return bs.toByteArray()
     }
+    
+    fun serializedWithId() : ByteArray {
+        val bs = ByteArrayOutputStream()
+        val mcStream = MinecraftOutputStream(bs)
+        mcStream.writeByte(id)
+        serialize(mcStream)
+        return bs.toByteArray()
+    }
 
     abstract class PePacketCodec {
         abstract val id: Int
@@ -553,8 +561,10 @@ class UnconnectedPongServerPePacket(
 }
 
 class CompressionWrapperPePacket(
-        vararg val packets: PePacket
-) : PePacket() {    
+        val packets: List<PePacket>
+) : PePacket() {
+    constructor(vararg packets: PePacket) : this(packets.toList())
+    
     override val id = Codec.id
     override val codec = Codec
     object Codec : PePacketCodec() {
@@ -703,9 +713,9 @@ class EncryptionWrapperPePacket(
             stream.write(obj.payload)
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
-            val bytes = ByteArray(stream.available())
-            stream.read(bytes)
-            return EncryptionWrapperPePacket(bytes)
+            return EncryptionWrapperPePacket(
+                    payload = stream.readRemainingBytes()
+            )
         }
     }
 }

@@ -10,7 +10,7 @@ class RakDatagramFlags(header: Byte) {
     val bAndAS: Boolean
     val continuousSend: Boolean
     val needsBAndAS: Boolean
-    val packetId: Int
+    val packetId: Byte = header
 
     constructor(type: CongestionControlType, bAndAS: Boolean = false) : this({
         var b = (1 shl 7)
@@ -30,7 +30,6 @@ class RakDatagramFlags(header: Byte) {
     }.invoke())
 
     init {
-        packetId = header.toInt()
         userPacket = isBit1(header, 7)
         ack = isBit1(header, 6)
         if(ack) {
@@ -62,8 +61,8 @@ class RakDatagramFlags(header: Byte) {
     }
 
     companion object {
-        val continuousUserDatagram = RakDatagramFlags(false, true, false).packetId
-        val nonContinuousUserDatagram = RakDatagramFlags(false, false, true).packetId
+        val continuousUserDatagram = RakDatagramFlags(false, true, false)
+        val nonContinuousUserDatagram = RakDatagramFlags(false, false, true)
 
         private fun Boolean.toInt() : Int {
             return if(this) 1 else 0

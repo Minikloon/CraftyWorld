@@ -29,7 +29,7 @@ fun main(args: Array<String>) {
 }
 
 fun testDecompress() {
-    println(decompressParse("78 DA 63 E1 64 61 60 00 00 00 49 00 12"))
+    println(decompressParse("78 9C 63 65 62 00 02 36 76 10 C9 00 00 00 BA 00 15"))
 }
 
 fun decompressParse(str: String) : String {

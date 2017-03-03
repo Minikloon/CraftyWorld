@@ -4,7 +4,7 @@ class RakMessageFlags(val header: Byte) {
     val reliability: RakMessageReliability
     val hasSplit: Boolean
 
-    constructor(reliability: RakMessageReliability, hasSplit: Boolean) : this({
+    constructor(reliability: RakMessageReliability, hasSplit: Boolean = false) : this({
         ((reliability.id shl 5) or (if(hasSplit) (1 shl 4) else 0)).toByte()
     }.invoke())
 

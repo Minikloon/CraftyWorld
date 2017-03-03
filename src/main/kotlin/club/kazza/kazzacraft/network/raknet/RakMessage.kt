@@ -17,11 +17,15 @@ class RakMessage(val headerFlags: RakMessageFlags, val reliability: MetaReliabil
     val dataAsStream: MinecraftInputStream
         get() = MinecraftInputStream(data)
     
-    data class MetaReliability(val reliableId: Int)
+    data class MetaReliability(val reliableId: Int) { companion object { val size = 3 } }
+    data class MetaOrder(val index: Int, val channel: Byte) { companion object { val size = 4 } }
+    data class MetaSplits(val splitsCount: Int, val splitsId: Short, val splitsIndex: Int) { companion object { val size = 10 } }
     
-    data class MetaOrder(val index: Int, val channel: Byte)
-    
-    data class MetaSplits(val splitsCount: Int, val splitsId: Short, val splitsIndex: Int)
+    private fun nullOr(obj: Any?, or: Int) : Int { return if(obj == null) 0 else or }
+    val headerSize by lazy {
+        3 + nullOr(reliability, MetaReliability.size) + nullOr(order, MetaOrder.size) + nullOr(splits, MetaSplits.size)
+    }
+    val size by lazy { headerSize + data.size }
     
     fun serialize(stream: MinecraftOutputStream) {
         Codec.serialize(this, stream)
@@ -31,13 +35,17 @@ class RakMessage(val headerFlags: RakMessageFlags, val reliability: MetaReliabil
         override fun serialize(obj: RakMessage, stream: MinecraftOutputStream) {
             stream.writeByte(obj.headerFlags.header)
             stream.writeShort(obj.data.size * 8)
-
-            val reliability = obj.headerFlags.reliability
-            if(reliability.reliable)
-                stream.write3BytesInt(obj.reliability!!.reliableId)
-            if(reliability.ordered) {
-                stream.write3BytesInt(obj.order!!.index)
+            
+            if(obj.reliability != null)
+                stream.write3BytesInt(obj.reliability.reliableId)
+            if(obj.order != null) {
+                stream.write3BytesInt(obj.order.index)
                 stream.writeByte(obj.order.channel)
+            }
+            if(obj.splits != null) {
+                stream.writeInt(obj.splits.splitsCount)
+                stream.writeShort(obj.splits.splitsId.toInt())
+                stream.writeInt(obj.splits.splitsIndex)
             }
 
             stream.write(obj.data)
