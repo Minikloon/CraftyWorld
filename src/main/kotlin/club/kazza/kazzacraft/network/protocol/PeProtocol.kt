@@ -6,8 +6,11 @@ import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
 import club.kazza.kazzacraft.utils.CompressionAlgorithm
 import club.kazza.kazzacraft.utils.compress
 import club.kazza.kazzacraft.utils.decompress
+import club.kazza.kazzacraft.utils.toHexStr
 import io.vertx.core.json.JsonObject
 import io.vertx.core.net.SocketAddress
+import org.joml.Vector2f
+import org.joml.Vector3f
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -15,6 +18,7 @@ import java.security.KeyFactory
 import java.security.PublicKey
 import java.security.spec.X509EncodedKeySpec
 import java.util.*
+import java.util.zip.Deflater
 
 abstract class InboundPePacketList {
     protected abstract fun getCodecs() : List<PePacket.PePacketCodec>
@@ -56,7 +60,10 @@ object ServerBoundPeTopLevelPackets : InboundPePacketList() {
 object ServerBoundPeWrappedPackets : InboundPePacketList() {
     override fun getCodecs(): List<PePacket.PePacketCodec> {
         return listOf(
-                ResourcePackClientResponsePePacket.Codec
+                ResourcePackClientResponsePePacket.Codec,
+                ChunkRadiusRequestPePacket.Codec,
+                PlayerActionPePacket.Codec,
+                SetPlayerPositionPePacket.Codec
         )
     }
 }
@@ -140,7 +147,7 @@ class LoginPePacket(
             val protocolVersion = stream.readInt()
             val edition = stream.readByte().toInt()
             
-            val payloadSize = stream.readVarInt()
+            val payloadSize = stream.readUnsignedVarInt()
             val zlibedPayload = stream.readRemainingBytes()
             
             val payload = zlibedPayload.decompress(CompressionAlgorithm.ZLIB, payloadSize)
@@ -162,7 +169,7 @@ class LoginPePacket(
     }
 }
 
-enum class PlayerStatus { LOGIN_ACCEPTED, UNKNOWN, SPAWN }
+enum class PlayerStatus { LOGIN_ACCEPTED, LOGIN_FAILED_CLIENT, LOGIN_FAILED_SERVER, SPAWN }
 class PlayerStatusPePacket(
         val status: PlayerStatus
 ) : PePacket() {
@@ -564,6 +571,14 @@ class CompressionWrapperPePacket(
         val packets: List<PePacket>
 ) : PePacket() {
     constructor(vararg packets: PePacket) : this(packets.toList())
+
+    fun serializedWithId(level: Int) : ByteArray {
+        val bs = ByteArrayOutputStream()
+        val mcStream = MinecraftOutputStream(bs)
+        mcStream.writeByte(id)
+        Codec.serialize(this, mcStream, level)
+        return bs.toByteArray()
+    }
     
     override val id = Codec.id
     override val codec = Codec
@@ -571,20 +586,23 @@ class CompressionWrapperPePacket(
         override val id = 0x06
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is CompressionWrapperPePacket) throw IllegalArgumentException()
+            serialize(obj, stream, Deflater.DEFAULT_COMPRESSION)
+        }
+        fun serialize(obj: CompressionWrapperPePacket, stream: MinecraftOutputStream, level: Int) {
             val bs = ByteArrayOutputStream()
             val mcStream = MinecraftOutputStream(bs)
             obj.packets.forEach {
                 val serialized = it.serialized()
-                mcStream.writeVarInt(serialized.size + 1) // 1 for packet id
+                mcStream.writeUnsignedVarInt(serialized.size + 1) // 1 for packet id
                 mcStream.writeByte(it.id)
                 mcStream.write(serialized)
             }
-            val compressed = bs.toByteArray().compress(CompressionAlgorithm.ZLIB)
-            stream.writeVarInt(compressed.size)
+            val compressed = bs.toByteArray().compress(CompressionAlgorithm.ZLIB, level)
+            stream.writeUnsignedVarInt(compressed.size)
             stream.write(compressed)
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
-            val compressedSize = stream.readVarInt()
+            val compressedSize = stream.readUnsignedVarInt()
             if(compressedSize > 500_000) throw IllegalStateException("client tried to create a huge CompressionWrapper of $compressedSize bytes")
             val compressed = stream.readByteArray(compressedSize)
             
@@ -595,11 +613,11 @@ class CompressionWrapperPePacket(
             val packets = mutableListOf<PePacket>()
             val decompressedStream = MinecraftInputStream(decompressed)
             while(decompressedStream.available() != 0) {
-                val size = decompressedStream.readVarInt()
+                val size = decompressedStream.readUnsignedVarInt()
                 val bytes = decompressedStream.readByteArray(size)
                 val packetStream = MinecraftInputStream(bytes)
                 val id = packetStream.readByte()
-                val codec = codecMap[id.toInt()] ?: throw IllegalStateException("Unknown pe message in compression wrapper $id")
+                val codec = codecMap[id.toInt()] ?: throw IllegalStateException("Unknown pe message in compression wrapper ${id.toHexStr()}")
                 val packet = codec.deserialize(packetStream)
                 packets.add(packet)
             }
@@ -645,7 +663,6 @@ class OpenConnectionReply2PePacket(
 ) : PePacket() {
     override val id = Codec.id
     override val codec = Codec
-
     object Codec : PePacketCodec() {
         override val id = 0x08
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
@@ -668,6 +685,108 @@ class OpenConnectionReply2PePacket(
     }
 }
 
+class SetTimePePacket(
+        val time: Int,
+        val started: Boolean
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x0b
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is SetTimePePacket) throw IllegalArgumentException()
+            stream.writeSignedVarInt(obj.time)
+            stream.writeBoolean(obj.started)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return SetTimePePacket(
+                    time = stream.readSignedVarInt(),
+                    started = stream.readBoolean()
+            )
+        }
+    }
+}
+
+enum class GameMode { SURVIVAL, CREATIVE, ADVENTURE, SPECTATOR }
+class StartGamePePacket(
+        val entityId: Long,
+        val runtimeEntityId: Long,
+        val spawn: Vector3f,
+        val yawAndPitch: Vector2f,
+        val seed: Int,
+        val dimension: Int,
+        val generator: Int,
+        val gamemode: GameMode,
+        val difficulty: Int,
+        val x: Int,
+        val y: Int,
+        val z: Int,
+        val achievementsDisabled: Boolean,
+        val dayCycleStopTime: Int,
+        val eduEdition: Boolean,
+        val rainLevel: Float,
+        val lightningLevel: Float,
+        val enableCommands: Boolean,
+        val resourcePackRequired: Boolean,
+        val levelId: String,
+        val worldName: String
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x0c
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is StartGamePePacket) throw IllegalArgumentException()
+            stream.writeSignedVarLong(obj.entityId)
+            stream.writeUnsignedVarLong(obj.runtimeEntityId)
+            stream.writeVector3fLe(obj.spawn)
+            stream.writeVector2fLe(obj.yawAndPitch)
+            stream.writeSignedVarInt(obj.seed)
+            stream.writeSignedVarInt(obj.dimension)
+            stream.writeSignedVarInt(obj.generator)
+            stream.writeSignedVarInt(obj.gamemode.ordinal)
+            stream.writeSignedVarInt(obj.difficulty)
+            stream.writeSignedVarInt(obj.x)
+            stream.writeSignedVarInt(obj.y)
+            stream.writeSignedVarInt(obj.z)
+            stream.writeBoolean(obj.achievementsDisabled)
+            stream.writeSignedVarInt(obj.dayCycleStopTime)
+            stream.writeBoolean(obj.eduEdition)
+            stream.writeFloatLe(obj.rainLevel)
+            stream.writeFloatLe(obj.lightningLevel)
+            stream.writeBoolean(obj.enableCommands)
+            stream.writeBoolean(obj.resourcePackRequired)
+            stream.writeString(obj.levelId)
+            stream.writeString(obj.worldName)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return StartGamePePacket(
+                    entityId = stream.readSignedVarLong(),
+                    runtimeEntityId = stream.readUnsignedVarLong(),
+                    spawn = stream.readVector3fLe(),
+                    yawAndPitch = stream.readVector2fLe(),
+                    seed = stream.readSignedVarInt(),
+                    dimension = stream.readSignedVarInt(),
+                    generator = stream.readSignedVarInt(),
+                    gamemode = GameMode.values()[stream.readSignedVarInt()],
+                    difficulty = stream.readSignedVarInt(),
+                    x = stream.readSignedVarInt(),
+                    y = stream.readSignedVarInt(),
+                    z = stream.readSignedVarInt(),
+                    achievementsDisabled = stream.readBoolean(),
+                    dayCycleStopTime = stream.readSignedVarInt(),
+                    eduEdition = stream.readBoolean(),
+                    rainLevel = stream.readFloat(),
+                    lightningLevel = stream.readFloat(),
+                    enableCommands = stream.readBoolean(),
+                    resourcePackRequired = stream.readBoolean(),
+                    levelId = stream.readString(),
+                    worldName = stream.readString()
+            )
+        }
+    }
+}
+
 class ConnectionRequestAcceptPePacket(
         val systemAddress: SocketAddress,
         val systemIndex: Int,
@@ -675,9 +794,8 @@ class ConnectionRequestAcceptPePacket(
         val incommingTimestamp: Long,
         val serverTimestamp: Long
 ) : PePacket() {
-    override val codec = Codec
     override val id = Codec.id
-
+    override val codec = Codec
     object Codec : PePacketCodec() {
         override val id = 0x10
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
@@ -700,12 +818,312 @@ class ConnectionRequestAcceptPePacket(
     }
 }
 
+enum class MoveMode { INTERPOLATE, TELEPORT, ROTATION }
+class SetPlayerPositionPePacket(
+        val entityId: Long,
+        val x: Float,
+        val y: Float,
+        val z: Float,
+        val headPitch: Float,
+        val headYaw: Float,
+        val bodyYaw: Float,
+        val mode: MoveMode,
+        val onGround: Boolean
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x14
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is SetPlayerPositionPePacket) throw IllegalArgumentException()
+            stream.writeUnsignedVarLong(obj.entityId)
+            stream.writeFloatLe(obj.x)
+            stream.writeFloatLe(obj.y)
+            stream.writeFloatLe(obj.z)
+            stream.writeFloatLe(obj.headPitch)
+            stream.writeFloatLe(obj.headYaw)
+            stream.writeFloatLe(obj.bodyYaw)
+            stream.writeByte(obj.mode.ordinal)
+            stream.writeBoolean(obj.onGround)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return SetPlayerPositionPePacket(
+                    entityId = stream.readUnsignedVarLong(),
+                    x = stream.readFloatLe(),
+                    y = stream.readFloatLe(),
+                    z = stream.readFloatLe(),
+                    headPitch = stream.readFloatLe(),
+                    headYaw = stream.readFloatLe(),
+                    bodyYaw = stream.readFloatLe(),
+                    mode = MoveMode.values()[stream.readByte().toInt()],
+                    onGround = stream.readBoolean()
+            )
+        }
+    }
+}
+
+enum class PlayerAttributeType(innerId: String, val minValue: Float, val maxValue: Float, val defaultValue: Float) {
+    ABSORPTION("absorption", 0f, Float.MAX_VALUE, 0f),
+    ATTACK_DAMAGE("attack_damage", 0f, Float.MAX_VALUE, 0f),
+    KNOCKBACK_RESISTANCE("knockback_resistance", 0f, 1f, 0f),
+    LUCK("luck", -1025f, 1024f, 0f),
+    FALL_DAMAGE("fall_damage", 0f, Float.MAX_VALUE, 1f),
+    HEALTH("health", 0f, 20f, 20f),
+    MOVEMENT_SPEED("movement", 0f, Float.MAX_VALUE, 0.1f),
+    FOLLOW_RANGE("follow_range", 0f, 2048f, 16f),
+    SATURATION("player.saturation", 0f, 20f, 5f),
+    EXHAUSTION("player.exhaustion", 0f, 5f, 0.41f),
+    HUNGER("player.hunger", 0f, 20f, 20f),
+    EXPERIENCE_LEVEL("player.level", 0f, 24791f, 0f),
+    EXPERIENCE("player.experience", 0f, 1f, 0f),
+    ;
+    
+    val id = "minecraft:$innerId"
+    
+    fun value(value: Float) : PlayerAttribute {
+        return PlayerAttribute(minValue, maxValue, value, defaultValue, id)
+    }
+    
+    companion object {
+        val byId = values().associateBy { it.id }
+    }
+}
+class PlayerAttribute(
+        val minValue: Float,
+        val maxValue: Float,
+        val value: Float,
+        val defaultValue: Float,
+        val name: String
+) {
+    object Codec : PeCodec<PlayerAttribute> {
+        override fun serialize(obj: PlayerAttribute, stream: MinecraftOutputStream) {
+            stream.writeFloatLe(obj.minValue)
+            stream.writeFloatLe(obj.maxValue)
+            stream.writeFloatLe(obj.value)
+            stream.writeFloatLe(obj.defaultValue)
+            stream.writeString(obj.name)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PlayerAttribute {
+            return PlayerAttribute(
+                    minValue = stream.readFloat(),
+                    maxValue = stream.readFloat(),
+                    value = stream.readFloat(),
+                    defaultValue = stream.readFloat(),
+                    name = stream.readString()
+            )
+        }
+    }
+    
+    companion object {
+        val defaults = PlayerAttributeType.values().map { it.value(it.defaultValue) }
+    }
+}
+class SetAttributesPePacket(
+        val entityId: Long,
+        val attributes: List<PlayerAttribute>
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x1f
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is SetAttributesPePacket) throw IllegalArgumentException()
+            stream.writeUnsignedVarLong(obj.entityId)
+            stream.writeUnsignedVarInt(obj.attributes.size)
+            obj.attributes.forEach { PlayerAttribute.Codec.serialize(it, stream) }
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return SetAttributesPePacket(
+                    entityId = stream.readUnsignedVarLong(),
+                    attributes = (1..stream.readUnsignedVarInt()).map { PlayerAttribute.Codec.deserialize(stream) }
+            )
+        }
+    }
+}
+
+enum class PlayerAction(val id: Int) {
+    START_BREAK(0),
+    ABORT_BREAK(1),
+    STOP_BREAK(2),
+    UNKNOWN_3(3),
+    UNKNOWN_4(4),
+    RELEASE_ITEM(5),
+    STOP_SLEEPING(6),
+    RESPAWN(7),
+    JUMP(8),
+    START_SPRINT(9),
+    STOP_SPRINT(10),
+    START_SNEAK(11),
+    STOP_SNEAK(12),
+    DIMENSION_CHANGE(13),
+    ABORT_DIMENSION_CHANGE(14),
+    START_GLIDE(15),
+    STOP_GLIDE(16)
+}
+class PlayerActionPePacket(
+        val entityId: Long,
+        val action: PlayerAction,
+        val x: Int,
+        val y: Int,
+        val z: Int,
+        val blockFace: Int
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x24
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is PlayerActionPePacket) throw IllegalArgumentException()
+            stream.writeUnsignedVarLong(obj.entityId)
+            stream.writeSignedVarInt(obj.action.ordinal)
+            stream.writeSignedVarInt(obj.x)
+            stream.writeUnsignedVarInt(obj.y)
+            stream.writeSignedVarInt(obj.z)
+            stream.writeSignedVarInt(obj.blockFace)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return PlayerActionPePacket(
+                    entityId = stream.readUnsignedVarLong(),
+                    action = PlayerAction.values()[stream.readSignedVarInt()],
+                    x = stream.readSignedVarInt(),
+                    y = stream.readUnsignedVarInt(),
+                    z = stream.readSignedVarInt(),
+                    blockFace = stream.readSignedVarInt()
+            )
+        }
+    }
+}
+
+class SetAdventureSettingsPePacket(
+        val settings: AdventureSettingsFlags,
+        val permissionLevel: Int
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x37
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is SetAdventureSettingsPePacket) throw IllegalArgumentException()
+            stream.writeUnsignedVarInt(obj.settings.bitField)
+            stream.writeUnsignedVarInt(obj.permissionLevel)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return SetAdventureSettingsPePacket(
+                    settings = AdventureSettingsFlags(stream.readUnsignedVarInt()),
+                    permissionLevel = stream.readUnsignedVarInt()
+            )
+        }
+    }
+}
+
+class FullChunkDataPePacket(
+        val x: Int,
+        val z: Int,
+        val data: ByteArray
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x3a
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is FullChunkDataPePacket) throw IllegalArgumentException()
+            stream.writeSignedVarInt(obj.x)
+            stream.writeSignedVarInt(obj.z)
+            stream.writeUnsignedVarInt(obj.data.size)
+            stream.write(obj.data)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return FullChunkDataPePacket(
+                    x = stream.readSignedVarInt(),
+                    z = stream.readSignedVarInt(),
+                    data = stream.readByteArray(stream.readUnsignedVarInt())
+            )
+        }
+    }
+}
+
+class SetCommandsEnabledPePacket(
+        val enabled: Boolean
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x3b
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is SetCommandsEnabledPePacket) throw IllegalArgumentException()
+            stream.writeBoolean(obj.enabled)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return SetCommandsEnabledPePacket(
+                    enabled = stream.readBoolean()
+            )
+        }
+    }
+}
+
+class SetDifficultyPePacket(
+        val difficulty: Int
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x3c
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is SetDifficultyPePacket) throw IllegalArgumentException()
+            stream.writeUnsignedVarInt(obj.difficulty)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return SetDifficultyPePacket(
+                    difficulty = stream.readUnsignedVarInt()
+            )
+        }
+    }
+}
+
+class ChunkRadiusRequestPePacket(
+        val desiredChunkRadius: Int
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x44
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is ChunkRadiusRequestPePacket) throw IllegalArgumentException()
+            stream.writeSignedVarInt(id)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return ChunkRadiusRequestPePacket(
+                    desiredChunkRadius = stream.readSignedVarInt()
+            )
+        }
+    }
+}
+
+class SetChunkRadiusPePacket(
+        val chunkRadius: Int
+) : PePacket() {
+    override val id = Codec.id
+    override val codec = Codec
+    object Codec : PePacketCodec() {
+        override val id = 0x45
+        override fun serialize(obj: Any, stream: MinecraftOutputStream) {
+            if(obj !is SetChunkRadiusPePacket) throw IllegalArgumentException()
+            stream.writeSignedVarInt(obj.chunkRadius)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PePacket {
+            return SetChunkRadiusPePacket(
+                    chunkRadius = stream.readSignedVarInt()
+            )
+        }
+    }
+}
+
 class EncryptionWrapperPePacket(
         val payload: ByteArray
 ) : PePacket() {
-    override val codec = Codec
+    constructor(payload: PePacket) : this(payload.serializedWithId())
     override val id = Codec.id
-    
+    override val codec = Codec
     object Codec : PePacketCodec() {
         override val id = 0xFE
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {

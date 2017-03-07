@@ -16,6 +16,8 @@ import io.vertx.core.buffer.Buffer
 import io.vertx.core.datagram.DatagramSocket
 import io.vertx.core.net.SocketAddress
 import io.vertx.core.net.impl.SocketAddressImpl
+import org.joml.Vector2f
+import org.joml.Vector3f
 import java.io.ByteArrayOutputStream
 import java.security.KeyFactory
 import java.security.MessageDigest
@@ -23,6 +25,7 @@ import java.security.spec.X509EncodedKeySpec
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.Deflater
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.SecretKey
@@ -82,7 +85,6 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         
         val headerFlags = RakDatagramFlags(mcStream.readByte())
         if(headerFlags.userPacket) {
-            println("${System.currentTimeMillis()} IN packet ${headerFlags.packetId.toByte().toHexStr()}")
             if(headerFlags.ack) {
                 handleRakAcknowledge(mcStream)
             }
@@ -96,7 +98,6 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
             }
         }
         else {
-            println("${System.currentTimeMillis()} IN rak packet ${headerFlags.packetId.toByte().toHexStr()}")
             handleRakNetPacket(headerFlags, mcStream)
         }
     }
@@ -177,7 +178,8 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
     }
 
     private fun handlePeMessage(message: PePacket) {
-        println("${System.currentTimeMillis()} HANDLE ${message::class.java.simpleName}")
+        if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerPositionPePacket)
+            println("${System.currentTimeMillis()} HANDLE ${message::class.java.simpleName}")
         when(message) {
             is ConnectedPingPePacket -> {
                 val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
@@ -198,7 +200,6 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                 sendNow(response, RELIABLE)
             }
             is EncryptionWrapperPePacket -> {
-                println("encryption wrapper!")
                 if(encrypted) {
                     throw NotImplementedError("Encryption not supported yet!")
                 } else {
@@ -209,7 +210,6 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                 }
             }
             is CompressionWrapperPePacket -> {
-                println("compression wrapper with ${message.packets.size} messages!")
                 message.packets.forEach { handlePeMessage(it) }
             }
             is LoginPePacket -> {
@@ -256,15 +256,142 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
             }
             is ResourcePackClientResponsePePacket -> {
                 println("resource pack response status: ${message.status}")
+                val startGame = {
+                    queueSend(StartGamePePacket(
+                            entityId = 2,
+                            runtimeEntityId = 0,
+                            spawn = Vector3f(0f, 18f, 0f),
+                            yawAndPitch = Vector2f(0f, 0f),
+                            seed = 12345,
+                            dimension = 0,
+                            generator = 1,
+                            gamemode = GameMode.SURVIVAL,
+                            difficulty = 0,
+                            x = 0,
+                            y = 18,
+                            z = 0,
+                            achievementsDisabled = true,
+                            dayCycleStopTime = 6000,
+                            eduEdition = false,
+                            rainLevel = 0f,
+                            lightningLevel = 0f,
+                            enableCommands = false,
+                            resourcePackRequired = false,
+                            levelId = "1m0AAMIFIgA=",
+                            worldName = "test"
+                    ))
+                    queueSend(SetChunkRadiusPePacket(5))
+                    queueSend(SetAttributesPePacket(0, PlayerAttribute.defaults))
+                    /*
+                    queueSend(SetTimePePacket(60000, false))
+                    queueSend(SetDifficultyPePacket(0))
+                    queueSend(SetCommandsEnabledPePacket(false))
+                    queueSend(SetAdventureSettingsPePacket(AdventureSettingsFlags(
+                            worldImmutable = false,
+                            noPvp = false,
+                            noPve = false,
+                            passiveMobs = false,
+                            autoJump = false,
+                            allowFly = false,
+                            noClip = false
+                    ), 0
+                     queueSend(SetAttributesPePacket(0, PlayerAttribute.defaults))
+                    */
+                }
+                println("status ${message.status}")
                 when(message.status) {
                     ResourcePackClientStatus.REQUEST_DATA -> {
-                        val data = ResourcePackDataPePacket(false, listOf(), listOf())
-                        queueSend(data)
+                        startGame()
+                    }
+                    ResourcePackClientStatus.PLAYER_READY -> {
+                        startGame()
                     }
                     else -> {
-                        println("unhandled resource pack status ${message.status}")
+                        throw NotImplementedError("unhandled resource pack status ${message.status}")
                     }
                 }
+            }
+            is ChunkRadiusRequestPePacket -> {
+                println("Requested chunk radius: ${message.desiredChunkRadius}")
+                val chunkRadius = 5
+                queueSend(SetChunkRadiusPePacket(chunkRadius))
+                //sendNow(EncryptionWrapperPePacket(CompressionWrapperPePacket(SetChunkRadiusPePacket(chunkRadius)).serializedWithId()), RELIABLE_ORDERED)
+                val squareRange = (-chunkRadius..chunkRadius)
+                var sent = 0
+                squareRange.forEach { chunkX ->
+                    squareRange.forEach { chunkZ ->
+                        val bs = ByteArrayOutputStream(1024)
+                        val mcStream = MinecraftOutputStream(bs)
+                        val chunksPerColumn = 1
+                        mcStream.writeByte(chunksPerColumn)
+                        (0 until chunksPerColumn).forEach { chunkLayer ->
+                            val blocksPerChunk = 16*16*16
+                            val blocks = ByteArray(blocksPerChunk) { 0x00 }
+                            if(chunkLayer == 0) {
+                                (0 until 16).forEach { bx ->
+                                    (0 until 16).forEach { bz ->
+                                        (0 until 4).forEach { by ->
+                                            val idx = (bx * 256) + (bz * 16) + (by)
+                                            val type = when (by) {
+                                                0 -> 7
+                                                1 -> 3
+                                                2 -> 3
+                                                3 -> 2
+                                                else -> 0
+                                            }
+                                            blocks[idx] = type.toByte()
+                                        }
+                                    }
+                                }
+                            }
+                            val data = ByteArray(blocksPerChunk / 2) { 0x00 }
+                            val blockLight = ByteArray(blocksPerChunk / 2) { 0x00.toByte() }
+                            val skyLight = if(chunkLayer == 0) {
+                                ByteArray(blocksPerChunk / 2) {
+                                    val mod16 = it % 16
+                                    if(mod16 == 0 || mod16 == 1 || mod16 == 8 || mod16 == 9) {
+                                        0
+                                    } else {
+                                        0xFF.toByte()
+                                    }
+                                }
+                            }
+                            else {
+                                ByteArray(blocksPerChunk / 2) { 0x00.toByte() }
+                            }
+                            mcStream.writeByte(0) // chunk mode
+                            mcStream.write(blocks)
+                            mcStream.write(data)
+                            mcStream.write(skyLight)
+                            mcStream.write(blockLight)
+                        }
+                        val height = ByteArray(256*2) { if(it < 256) 4 else 0 }
+                        val biomeIds = ByteArray(16*16) { 0x01 }
+                        mcStream.write(height)
+                        mcStream.write(biomeIds)
+                        mcStream.writeByte(0) // something about border blocks
+
+                        mcStream.writeSignedVarInt(0) // block entities
+
+                        val chunkBytes = bs.toByteArray()
+                        
+                        val chunkPacket = FullChunkDataPePacket(chunkX, chunkZ, chunkBytes)
+                        
+                        val batched = CompressionWrapperPePacket(chunkPacket)
+                        val compressed = batched.serializedWithId(Deflater.BEST_COMPRESSION)
+
+                        sendNow(EncryptionWrapperPePacket(compressed), RELIABLE_ORDERED)
+                        if(sent++ == 56) {
+                            queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
+                        }
+                    }
+                }
+            }
+            is PlayerActionPePacket -> {
+                println("action ${message.action}")
+            }
+            is SetPlayerPositionPePacket -> {
+                
             }
             else -> {
                 println("Unhandled pe message ${message.javaClass.simpleName}")
@@ -325,61 +452,10 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         ackQueue.clear()
     }
 
-    fun sendNowPlain(packet: PePacket) {
-        if(packet !is AckPePacket && packet !is UnconnectedPongServerPePacket)
-            println("${System.currentTimeMillis()} OUT unconnected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
-        
-        val serialized = packet.serializedWithId()
-        socket.send(Buffer.buffer(serialized), address.port(), address.host()) {}
-    }
-    
-    /*
-    fun sendConnected(packet: PePacket, reliability: RakMessageReliability = RELIABLE_ORDERED, encryptionWrap: Boolean = true) {
-        // TODO support raknet multi-message datagram && multi-datagram message
-        val byteStream = ByteArrayOutputStream()
-        val mcStream = MinecraftOutputStream(byteStream)
-        if(loggedIn && encryptionWrap)
-            mcStream.writeByte(EncryptionWrapperPePacket.Codec.id)
-        mcStream.writeByte(packet.id)
-        packet.serialize(mcStream)
-        val packetBuffer = byteStream.toByteArray()
-
-        val dByteStream = ByteArrayOutputStream()
-        val dMcStream = MinecraftOutputStream(dByteStream)
-
-        dMcStream.writeByte(RakDatagramFlags.nonContinuousUserDatagram.packetId)
-        dMcStream.write3BytesInt(datagramSeqNo++)
-
-        val message = RakMessage(
-                RakMessageFlags(reliability, hasSplit = false),
-                if(reliability.reliable) RakMessage.MetaReliability(messageSeqNo++) else null,
-                if(reliability.ordered) RakMessage.MetaOrder(messageOrderIndex++, channel = 0) else null,
-                null,
-                packetBuffer
-        )
-        message.serialize(dMcStream)
-
-        if(packet !is ConnectedPongPePacket)
-            println("${System.currentTimeMillis()} OUT connected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
-        socket.send(Buffer.buffer(dByteStream.toByteArray()), address.port(), address.host()) {}
-    }
-    */
-
-    fun sendNow(packet: PePacket, reliability: RakMessageReliability) {
-        val message = RakMessage(
-                RakMessageFlags(reliability),
-                if(reliability.reliable) RakMessage.MetaReliability(messageSeqNo++) else null,
-                if(reliability.ordered) RakMessage.MetaOrder(messageOrderIndex++, channel = 0) else null,
-                null,
-                packet.serializedWithId()
-        )
-        val datagrams = binpackMessagesInDatagrams(message)
-        datagrams.forEach { socket.send(Buffer.buffer(it.serialized()), address.port(), address.host()) {} }
-    }
-
     fun queueSend(packet: PePacket) {
         require(packet !is CompressionWrapperPePacket) { "can't queue up compression wrappers, send them directly or queue their decompressed content" }
         sendQueue.add(packet)
+        println("${System.currentTimeMillis()} QUEUE ${packet::class.java.simpleName}")
     }
     
     private fun processPacketSendQueue() {
@@ -396,6 +472,18 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
 
         sendNow(wrappedPacket, RELIABLE_ORDERED)
         sendQueue.clear()
+    }
+
+    fun sendNow(packet: PePacket, reliability: RakMessageReliability) {
+        val message = RakMessage(
+                RakMessageFlags(reliability),
+                if(reliability.reliable) RakMessage.MetaReliability(messageSeqNo++) else null,
+                if(reliability.ordered) RakMessage.MetaOrder(messageOrderIndex++, channel = 0) else null,
+                null,
+                packet.serializedWithId()
+        )
+        val datagrams = binpackMessagesInDatagrams(message)
+        datagrams.forEach { socket.send(Buffer.buffer(it.serialized()), address.port(), address.host()) {} }
     }
 
     private fun binpackMessagesInDatagrams(vararg messages: RakMessage) : List<RakDatagram> {
@@ -425,12 +513,14 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
             else {
                 val splitId = messageSplitId++
                 var splitsCount = Math.ceil((packet.size.toDouble() / maxSize)).toInt()
-                if(packet.size + splitsCount * 3 > maxSize) ++splitsCount
+                val overheadFromSplitting = splitsCount * RakMessage.MetaSplits.size
+                if(packet.size + overheadFromSplitting > splitsCount * maxSize) ++splitsCount
                 
                 (0 until splitsCount).map { splitIndex ->
+                    val dataIndex = splitIndex * (maxSize - RakMessage.MetaSplits.size)
                     val splitData = packet.data.copyOfRange(
-                            splitIndex * maxSize,
-                            splitIndex * maxSize + Math.min(maxSize, packet.data.size - splitIndex * maxSize))
+                            dataIndex,
+                            dataIndex + Math.min(maxSize, packet.data.size - dataIndex))
                     RakMessage(
                             RakMessageFlags(packet.headerFlags.reliability, hasSplit = true),
                             RakMessage.MetaReliability(messageSeqNo++),
@@ -441,6 +531,14 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                 }
             }
         }
+    }
+
+    fun sendNowPlain(packet: PePacket) {
+        if(packet !is AckPePacket && packet !is UnconnectedPongServerPePacket)
+            println("${System.currentTimeMillis()} OUT unconnected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
+
+        val serialized = packet.serializedWithId()
+        socket.send(Buffer.buffer(serialized), address.port(), address.host()) {}
     }
     
     /*

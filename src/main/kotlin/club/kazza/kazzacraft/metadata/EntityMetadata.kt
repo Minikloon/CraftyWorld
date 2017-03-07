@@ -34,7 +34,7 @@ open class EntityMetadata(
             }
             is Int -> {
                 stream.writeByte(1)
-                stream.writeVarInt(value)
+                stream.writeUnsignedVarInt(value)
             }
             is Float -> {
                 stream.writeByte(2)

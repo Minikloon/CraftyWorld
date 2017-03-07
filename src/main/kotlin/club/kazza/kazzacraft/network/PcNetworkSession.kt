@@ -74,7 +74,7 @@ class PcNetworkSession(val server: PcConnectionServer, private val socket: NetSo
         val stream = ByteArrayInputStream(it.bytes)
         val reader = MinecraftInputStream(stream)
 
-        val packetId = reader.readVarInt()
+        val packetId = reader.readUnsignedVarInt()
 
         val codec = state.pcPacketList.idToCodec[packetId]
         if(codec == null) {

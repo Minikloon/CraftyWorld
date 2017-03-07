@@ -46,8 +46,8 @@ class ChunkSection(val typeAndData: LongPackedArray, val blockLight: NibbleArray
 
     fun writeToStream(stream: MinecraftOutputStream) {
         stream.writeByte(bitsPerBlock)
-        stream.writeVarInt(0)
-        stream.writeVarInt(typeAndData.backing.size)
+        stream.writeUnsignedVarInt(0)
+        stream.writeUnsignedVarInt(typeAndData.backing.size)
         typeAndData.backing.forEach { stream.writeLong(it) }
         stream.write(blockLight.backing)
         if(skyLight != null)

@@ -149,16 +149,16 @@ object Pc {
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is EncryptionRequestPcPacket) throw IllegalArgumentException()
                         stream.writeString(obj.serverId)
-                        stream.writeVarInt(obj.publicKey.size)
+                        stream.writeUnsignedVarInt(obj.publicKey.size)
                         stream.write(obj.publicKey)
-                        stream.writeVarInt(obj.verifyToken.size)
+                        stream.writeUnsignedVarInt(obj.verifyToken.size)
                         stream.write(obj.verifyToken)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         val serverId = stream.readString()
-                        val publicKey = ByteArray(stream.readVarInt())
+                        val publicKey = ByteArray(stream.readUnsignedVarInt())
                         stream.readFully(publicKey)
-                        val verifyToken = ByteArray(stream.readVarInt())
+                        val verifyToken = ByteArray(stream.readUnsignedVarInt())
                         stream.readFully(verifyToken)
                         return EncryptionRequestPcPacket(
                                 serverId = serverId,
@@ -198,11 +198,11 @@ object Pc {
                     override val id = 0x03
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is SetCompressionPcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.maxSize)
+                        stream.writeUnsignedVarInt(obj.maxSize)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return SetCompressionPcPacket(
-                                maxSize = stream.readVarInt()
+                                maxSize = stream.readUnsignedVarInt()
                         )
                     }
                 }
@@ -225,7 +225,7 @@ object Pc {
                     override val id = 0x05
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is SpawnPlayerPcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.entityId)
+                        stream.writeUnsignedVarInt(obj.entityId)
                         stream.writeUuid(obj.playerUuid)
                         stream.writeDouble(obj.x)
                         stream.writeDouble(obj.y)
@@ -238,7 +238,7 @@ object Pc {
                         throw NotImplementedError() // TODO
                         /*
                         return SpawnPlayerPcPacket(
-                                entityId = stream.readVarInt(),
+                                entityId = stream.readUnsignedVarInt(),
                                 playerUuid = stream.readUuid(),
                                 x = stream.readDouble(),
                                 y = stream.readDouble(),
@@ -320,11 +320,11 @@ object Pc {
                     override val id = 0x1F
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is ServerKeepAlivePcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.confirmId)
+                        stream.writeUnsignedVarInt(obj.confirmId)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return ServerKeepAlivePcPacket(
-                                confirmId = stream.readVarInt()
+                                confirmId = stream.readUnsignedVarInt()
                         )
                     }
                 }
@@ -347,16 +347,16 @@ object Pc {
                         stream.writeInt(obj.x)
                         stream.writeInt(obj.z)
                         stream.writeBoolean(obj.continuous)
-                        stream.writeVarInt(obj.chunkMask)
+                        stream.writeUnsignedVarInt(obj.chunkMask)
                         val sections = obj.sections.filterNotNull()
                         val dataSize = sections.sumBy { it.byteSize } + if(obj.biomes == null) 0 else obj.biomes.size
-                        stream.writeVarInt(dataSize)
+                        stream.writeUnsignedVarInt(dataSize)
                         sections.forEach {
                             it.writeToStream(stream)
                         }
                         if(obj.biomes != null)
                             stream.write(obj.biomes)
-                        stream.writeVarInt(0)
+                        stream.writeUnsignedVarInt(0)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         throw NotImplementedError()
@@ -433,14 +433,14 @@ object Pc {
                     override val id = 0x2D
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is PlayerListItemPcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.action)
-                        stream.writeVarInt(obj.items.size)
+                        stream.writeUnsignedVarInt(obj.action)
+                        stream.writeUnsignedVarInt(obj.items.size)
                         obj.items.forEach { it.serialize(stream) }
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
-                        val action = stream.readVarInt()
+                        val action = stream.readUnsignedVarInt()
                         val actionCodec = actionCodecs[action] ?: throw IllegalStateException("Unknown player list action id $action")
-                        val items = (0 until stream.readVarInt()).map {
+                        val items = (0 until stream.readUnsignedVarInt()).map {
                             actionCodec.deserialize(stream) as PlayerListItem
                         }
                         return PlayerListItemPcPacket(action, items)
@@ -466,7 +466,7 @@ object Pc {
                             if(obj !is PlayerListItemAdd) throw IllegalArgumentException()
                             stream.writeUuid(obj.uuid)
                             stream.writeString(obj.name)
-                            stream.writeVarInt(obj.properties.size)
+                            stream.writeUnsignedVarInt(obj.properties.size)
                             obj.properties.forEach {
                                 stream.writeString(it.name)
                                 stream.writeString(it.value)
@@ -474,8 +474,8 @@ object Pc {
                                 if(it.signature != null)
                                     stream.writeString(it.signature)
                             }
-                            stream.writeVarInt(obj.gamemode)
-                            stream.writeVarInt(obj.ping)
+                            stream.writeUnsignedVarInt(obj.gamemode)
+                            stream.writeUnsignedVarInt(obj.ping)
                             stream.writeBoolean(obj.displayName != null)
                             if(obj.displayName != null)
                                 stream.writeJson(obj.displayName)
@@ -484,15 +484,15 @@ object Pc {
                             return PlayerListItemAdd(
                                     uuid = stream.readUuid(),
                                     name = stream.readString(),
-                                    properties = (0 until stream.readVarInt()).map {
+                                    properties = (0 until stream.readUnsignedVarInt()).map {
                                         ProfileProperty(
                                                 name = stream.readString(),
                                                 value = stream.readString(),
                                                 signature = if(stream.readBoolean()) stream.readString() else null
                                         )
                                     },
-                                    gamemode = stream.readVarInt(),
-                                    ping = stream.readVarInt(),
+                                    gamemode = stream.readUnsignedVarInt(),
+                                    ping = stream.readUnsignedVarInt(),
                                     displayName = if(stream.readBoolean()) stream.readJson(McChat::class.java) else null
                             )
                         }
@@ -509,12 +509,12 @@ object Pc {
                         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                             if(obj !is PlayerListItemUpdateGamemode) throw IllegalArgumentException()
                             stream.writeUuid(obj.uuid)
-                            stream.writeVarInt(obj.gamemode)
+                            stream.writeUnsignedVarInt(obj.gamemode)
                         }
                         override fun deserialize(stream: MinecraftInputStream): PcPacket {
                             return PlayerListItemUpdateGamemode(
                                     uuid = stream.readUuid(),
-                                    gamemode = stream.readVarInt()
+                                    gamemode = stream.readUnsignedVarInt()
                             )
                         }
                     }
@@ -530,12 +530,12 @@ object Pc {
                         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                             if(obj !is PlayerListItemUpdateLatency) throw IllegalArgumentException()
                             stream.writeUuid(obj.uuid)
-                            stream.writeVarInt(obj.ping)
+                            stream.writeUnsignedVarInt(obj.ping)
                         }
                         override fun deserialize(stream: MinecraftInputStream): PcPacket {
                             return PlayerListItemUpdateLatency(
                                     uuid = stream.readUuid(),
-                                    ping = stream.readVarInt()
+                                    ping = stream.readUnsignedVarInt()
                             )
                         }
                     }
@@ -598,7 +598,7 @@ object Pc {
                         stream.writeFloat(obj.loc.yaw)
                         stream.writeFloat(obj.loc.pitch)
                         stream.writeByte(obj.relativeFlags)
-                        stream.writeVarInt(obj.confirmId)
+                        stream.writeUnsignedVarInt(obj.confirmId)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return PlayerTeleportPcPacket(
@@ -610,7 +610,7 @@ object Pc {
                                         pitch = stream.readFloat()
                                 ),
                                 relativeFlags = stream.readByte().toInt(),
-                                confirmId = stream.readVarInt()
+                                confirmId = stream.readUnsignedVarInt()
                         )
                     }
                 }
@@ -669,7 +669,7 @@ object Pc {
                     override val id = 0x49
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is EntityTeleportPcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.entityId)
+                        stream.writeUnsignedVarInt(obj.entityId)
                         stream.writeDouble(obj.x)
                         stream.writeDouble(obj.y)
                         stream.writeDouble(obj.z)
@@ -679,7 +679,7 @@ object Pc {
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return EntityTeleportPcPacket(
-                                entityId = stream.readVarInt(),
+                                entityId = stream.readUnsignedVarInt(),
                                 x = stream.readDouble(),
                                 y = stream.readDouble(),
                                 z = stream.readDouble(),
@@ -707,17 +707,17 @@ object Pc {
                     override val id = 0x00
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is HandshakePcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.protocolVersion)
+                        stream.writeUnsignedVarInt(obj.protocolVersion)
                         stream.writeString(obj.serverAddress)
                         stream.writeShort(obj.port)
-                        stream.writeVarInt(obj.nextState)
+                        stream.writeUnsignedVarInt(obj.nextState)
                     }
                     override fun deserialize(stream: MinecraftInputStream) : PcPacket {
                         return HandshakePcPacket(
-                                protocolVersion = stream.readVarInt(),
+                                protocolVersion = stream.readUnsignedVarInt(),
                                 serverAddress = stream.readString(),
                                 port = stream.readUnsignedShort(),
-                                nextState = stream.readVarInt()
+                                nextState = stream.readUnsignedVarInt()
                         )
                     }
                 }
@@ -787,15 +787,15 @@ object Pc {
                     override val id = 0x01
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is EncryptionResponsePcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.sharedSecret.size)
+                        stream.writeUnsignedVarInt(obj.sharedSecret.size)
                         stream.write(obj.sharedSecret)
-                        stream.writeVarInt(obj.verifyToken.size)
+                        stream.writeUnsignedVarInt(obj.verifyToken.size)
                         stream.write(obj.verifyToken)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
-                        val sharedSecret = ByteArray(stream.readVarInt())
+                        val sharedSecret = ByteArray(stream.readUnsignedVarInt())
                         stream.readFully(sharedSecret)
-                        val verifyToken = ByteArray(stream.readVarInt())
+                        val verifyToken = ByteArray(stream.readUnsignedVarInt())
                         stream.readFully(verifyToken)
                         return EncryptionResponsePcPacket(
                                 sharedSecret = sharedSecret,
@@ -815,11 +815,11 @@ object Pc {
                     override val id = 0x00
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is PlayerTeleportConfirmPcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.confirmId)
+                        stream.writeUnsignedVarInt(obj.confirmId)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return PlayerTeleportConfirmPcPacket(
-                                confirmId = stream.readVarInt()
+                                confirmId = stream.readUnsignedVarInt()
                         )
                     }
                 }
@@ -851,11 +851,11 @@ object Pc {
                     override val id = 0x03
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is ClientStatusPcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.action)
+                        stream.writeUnsignedVarInt(obj.action)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return ClientStatusPcPacket(
-                                action = stream.readVarInt()
+                                action = stream.readUnsignedVarInt()
                         )
                     }
                 }
@@ -876,19 +876,19 @@ object Pc {
                         if(obj !is ClientSettingsPcPacket) throw IllegalArgumentException()
                         stream.writeString(obj.locale)
                         stream.writeByte(obj.viewDistance)
-                        stream.writeVarInt(obj.chatMode)
+                        stream.writeUnsignedVarInt(obj.chatMode)
                         stream.writeBoolean(obj.chatColors)
                         stream.writeByte(obj.skinParts)
-                        stream.writeVarInt(obj.mainHand)
+                        stream.writeUnsignedVarInt(obj.mainHand)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return ClientSettingsPcPacket(
                                 locale = stream.readString(),
                                 viewDistance = stream.readByte().toInt(),
-                                chatMode = stream.readVarInt(),
+                                chatMode = stream.readUnsignedVarInt(),
                                 chatColors = stream.readBoolean(),
                                 skinParts = stream.readUnsignedByte(),
-                                mainHand = stream.readVarInt()
+                                mainHand = stream.readUnsignedVarInt()
                         )
                     }
                 }
@@ -923,11 +923,11 @@ object Pc {
                     override val id = 0x0B
                     override fun serialize(obj: Any, stream: MinecraftOutputStream) {
                         if(obj !is ClientKeepAlivePcPacket) throw IllegalArgumentException()
-                        stream.writeVarInt(obj.confirmId)
+                        stream.writeUnsignedVarInt(obj.confirmId)
                     }
                     override fun deserialize(stream: MinecraftInputStream): PcPacket {
                         return ClientKeepAlivePcPacket(
-                                confirmId = stream.readVarInt()
+                                confirmId = stream.readUnsignedVarInt()
                         )
                     }
                 }

@@ -19,9 +19,10 @@ fun ByteArray.decompress(algo: CompressionAlgorithm, expectedSize: Int = 0) : By
     return bs.toByteArray()
 }
 
-fun ByteArray.compress(algo: CompressionAlgorithm) : ByteArray {
+fun ByteArray.compress(algo: CompressionAlgorithm, level: Int = Deflater.DEFAULT_COMPRESSION) : ByteArray {
     val deflater = Deflater()
     deflater.setInput(this)
+    deflater.setLevel(level)
     deflater.finish()
     
     val bufferSize = size + 32
