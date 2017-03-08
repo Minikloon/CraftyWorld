@@ -11,6 +11,7 @@ import club.kazza.kazzacraft.network.security.generateKeyPair
 import club.kazza.kazzacraft.network.serialization.MinecraftOutputStream
 import club.kazza.kazzacraft.world.World
 import java.io.ByteArrayOutputStream
+import java.time.Duration
 import javax.crypto.Cipher
 
 class PcConnectionServer(val port: Int, val world: World) : AbstractVerticle() {
@@ -51,7 +52,7 @@ class PcConnectionServer(val port: Int, val world: World) : AbstractVerticle() {
         }
 
         vertx.setPeriodic(1000) {
-            val toRemove = sessions.filter { it.value.lastUpdate.elapsedMs > 3500 }
+            val toRemove = sessions.filter { it.value.lastUpdate.elapsed.seconds > 3500 }
             for(key in toRemove.keys)
                 sessions.remove(key)
         }

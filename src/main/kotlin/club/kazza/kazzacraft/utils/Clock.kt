@@ -1,18 +1,18 @@
 package club.kazza.kazzacraft.utils;
 
-class Clock {
-    private var startMs = System.currentTimeMillis()
+import java.time.Duration
+import java.time.Instant
 
-    val elapsedMs : Long
-        get() = System.currentTimeMillis() - startMs
+class Clock(var start: Instant) {
+    constructor() : this(Instant.now())
 
-    val elapsedSeconds : Double
-        get() = elapsedMs / 1000.0
+    val elapsed: Duration
+        get() = Duration.between(Instant.now(), start)
 
     // returns elapsed ms
-    fun reset() : Long {
-        val elapsed = elapsedMs
-        startMs = System.currentTimeMillis()
+    fun reset() : Duration {
+        val elapsed = elapsed
+        start = Instant.now()
         return elapsed
     }
 }
