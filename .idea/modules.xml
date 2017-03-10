@@ -2,9 +2,28 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/KazzaCraft.iml" filepath="$PROJECT_DIR$/.idea/modules/KazzaCraft.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/KazzaCraft_main.iml" filepath="$PROJECT_DIR$/.idea/modules/KazzaCraft_main.iml" group="KazzaCraft" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/KazzaCraft_test.iml" filepath="$PROJECT_DIR$/.idea/modules/KazzaCraft_test.iml" group="KazzaCraft" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-bootstrap/crafty-bootstrap.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-bootstrap/crafty-bootstrap.iml" group="crafty-bootstrap" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-bootstrap/crafty-bootstrap_main.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-bootstrap/crafty-bootstrap_main.iml" group="crafty-bootstrap" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-bootstrap/crafty-bootstrap_test.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-bootstrap/crafty-bootstrap_test.iml" group="crafty-bootstrap" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-common/crafty-common.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-common/crafty-common.iml" group="crafty-common" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-common/crafty-common_main.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-common/crafty-common_main.iml" group="crafty-common" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-common/crafty-common_test.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-common/crafty-common_test.iml" group="crafty-common" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-nbt/crafty-nbt.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-nbt/crafty-nbt.iml" group="crafty-nbt" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-nbt/crafty-nbt_main.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-nbt/crafty-nbt_main.iml" group="crafty-nbt" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-nbt/crafty-nbt_test.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-nbt/crafty-nbt_test.iml" group="crafty-nbt" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-pc/crafty-pc.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-pc/crafty-pc.iml" group="crafty-pc" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-pc/crafty-pc_main.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-pc/crafty-pc_main.iml" group="crafty-pc" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-pc/crafty-pc_test.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-pc/crafty-pc_test.iml" group="crafty-pc" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-pe/crafty-pe.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-pe/crafty-pe.iml" group="crafty-pe" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-pe/crafty-pe_main.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-pe/crafty-pe_main.iml" group="crafty-pe" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-pe/crafty-pe_test.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-pe/crafty-pe_test.iml" group="crafty-pe" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-proto/crafty-proto.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-proto/crafty-proto.iml" group="crafty-proto" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-proto/crafty-proto_main.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-proto/crafty-proto_main.iml" group="crafty-proto" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-proto/crafty-proto_test.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-proto/crafty-proto_test.iml" group="crafty-proto" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-server/crafty-server.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-server/crafty-server.iml" group="crafty-server" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-server/crafty-server_main.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-server/crafty-server_main.iml" group="crafty-server" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-server/crafty-server_test.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-server/crafty-server_test.iml" group="crafty-server" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/crafty-world.iml" filepath="$PROJECT_DIR$/.idea/modules/crafty-world.iml" />
     </modules>
   </component>
 </project>

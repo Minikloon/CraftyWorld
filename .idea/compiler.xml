@@ -1,12 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="CompilerConfiguration">
-    <annotationProcessing>
-      <profile default="true" name="Default" enabled="true" />
-    </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="KazzaCraft_main" target="1.8" />
-      <module name="KazzaCraft_test" target="1.8" />
+      <module name="common_main" target="1.8" />
+      <module name="common_test" target="1.8" />
+      <module name="crafty-bootstrap_main" target="1.8" />
+      <module name="crafty-bootstrap_test" target="1.8" />
+      <module name="crafty-common_main" target="1.8" />
+      <module name="crafty-common_test" target="1.8" />
+      <module name="crafty-nbt_main" target="1.8" />
+      <module name="crafty-nbt_test" target="1.8" />
+      <module name="crafty-pc_main" target="1.8" />
+      <module name="crafty-pc_test" target="1.8" />
+      <module name="crafty-pe_main" target="1.8" />
+      <module name="crafty-pe_test" target="1.8" />
+      <module name="crafty-proto_main" target="1.8" />
+      <module name="crafty-proto_test" target="1.8" />
+      <module name="crafty-server_main" target="1.8" />
+      <module name="crafty-server_test" target="1.8" />
     </bytecodeTargetLevel>
   </component>
 </project>

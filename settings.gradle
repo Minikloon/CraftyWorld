@@ -1,2 +1,9 @@
-rootProject.name = 'KazzaCraft'
+rootProject.name = 'crafty-world'
+include 'crafty-pc'
+include 'crafty-pe'
+include 'crafty-server'
+include 'crafty-proto'
+include 'crafty-common'
+include 'crafty-bootstrap'
+include 'crafty-nbt'
 

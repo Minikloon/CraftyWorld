@@ -1,44 +1,30 @@
-group 'club.kazza'
+group 'world.crafty'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.1.0-rc-91'
-
+    ext.kotlin_version = '1.1.0'
     repositories {
         mavenCentral()
-        maven {
-            url "http://dl.bintray.com/kotlin/kotlin-eap-1.1"
-        }
     }
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 
-apply plugin: 'kotlin'
+subprojects  {
+    apply plugin: 'kotlin'
+    
+    repositories {
+        mavenCentral()
+    }
 
-repositories {
-    mavenCentral()
-    maven {
-        url "http://dl.bintray.com/kotlin/kotlin-eap-1.1"
+    dependencies {
+        compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
     }
 }
 
-dependencies {
-    compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
-    compile "io.vertx:vertx-core:3.3.3"
-    compile "com.fasterxml.jackson.module:jackson-module-kotlin:2.8.4"
-    compile "org.joml:joml:1.9.2"
-}
-
-jar {
-    from {
-        (configurations.runtime).collect {
-            it.isDirectory() ? it : zipTree(it)
-        }
-    }
-    manifest {
-        attributes("Main-Class": "club.kazza.kazzacraft.MainKt")
+configure(subprojects.findAll { it.name != "crafty-common" }) {
+    dependencies {
+        compile project(":crafty-common")
     }
 }

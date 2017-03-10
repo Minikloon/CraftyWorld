@@ -1,0 +1,8 @@
+group 'world.crafty'
+version '1.0-SNAPSHOT'
+
+dependencies {
+    compile project(":crafty-pe")
+    compile project(":crafty-pc")
+    compile project(":crafty-server")
+}
