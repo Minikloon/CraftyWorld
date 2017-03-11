@@ -2,8 +2,7 @@ package world.crafty.pe
 
 import world.crafty.pe.jwt.LoginExtraData
 import world.crafty.pe.raknet.RakMessageReliability.*
-import io.vertx.core.AbstractVerticle
-import io.vertx.core.buffer.Buffer
+import io.vertx.core.Vertx
 import io.vertx.core.datagram.DatagramSocket
 import io.vertx.core.net.SocketAddress
 import io.vertx.core.net.impl.SocketAddressImpl
@@ -11,27 +10,19 @@ import org.joml.Vector2f
 import org.joml.Vector3f
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
-import world.crafty.common.utils.EvictingQueue
-import world.crafty.common.utils.average
-import world.crafty.common.utils.kotlin.firstOrCompute
-import world.crafty.common.utils.toBytes
-import world.crafty.common.utils.toHexStr
 import world.crafty.pe.proto.PePacket
-import world.crafty.pe.proto.ServerBoundPeRaknetPackets
 import world.crafty.pe.proto.ServerBoundPeTopLevelPackets
+import world.crafty.pe.proto.ServerListPongExtraData
 import world.crafty.pe.proto.packets.client.*
 import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
-import world.crafty.pe.raknet.packets.*
 import world.crafty.pe.raknet.*
+import world.crafty.pe.raknet.session.RakNetworkSession
 import java.io.ByteArrayOutputStream
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.spec.X509EncodedKeySpec
-import java.time.Duration
-import java.time.Instant
 import java.util.*
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.Deflater
 import javax.crypto.Cipher
@@ -40,14 +31,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocket, val address: SocketAddress) : AbstractVerticle() {    
-    private var datagramSeqNo: Int = 0
-    private var messageSeqNo: Int = 0
-    private var messageOrderIndex: Int = 0
-    private var messageSplitId: Short = 0
-    
-    private var mtuSize = 1000
-    
+class PeNetworkSession(val server: PeConnectionServer, socket: DatagramSocket, address: SocketAddress) : RakNetworkSession(socket, address) {
     private var loggedIn = false
     var loginExtraData: LoginExtraData? = null
         private set
@@ -58,156 +42,43 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
     private lateinit var secretKey: SecretKey
     private val sendCounter = AtomicLong(0)
     
-    private val lastFewRoundTrips = EvictingQueue<Duration>(16)
-    private val roundTripTime: Duration
-        get() = if(lastFewRoundTrips.size == 0) Duration.ofMillis(200) else lastFewRoundTrips.average()
-    
-    private var datagramsPerSendLoop = 16
-    private var lastNack = Instant.MIN
-    
-    private val incompleteSplits = mutableMapOf<Short, SplittedMessage>()
-    private val orderingChannels = mutableMapOf<Byte, OrderingChannel>()
-
-    private val receiveQueue = ConcurrentLinkedQueue<Buffer>()
-    private val receiveAckBuffer = mutableListOf<Int>()
     private val packetSendQueue = mutableListOf<PePacket>()
-    private val datagramSendQueue: Queue<RakDatagram> = LinkedList<RakDatagram>()
-    private val needAcks = mutableMapOf<Int, RakSentDatagram>()
-    
-    override fun start() {
-        vertx.setPeriodic(2500) { _ -> pruneSplittedDatagrams() }
-        vertx.setPeriodic(10) { _ -> processDatagramReceiveQueue() }
-        vertx.setPeriodic(10) { _ -> processDatagramSendQueue() }
-        vertx.setPeriodic(20) { _ -> processPacketSendQueue() }
-        vertx.setPeriodic(40) { _ -> processResends() }
-        vertx.setPeriodic(25) { _ -> processOrderingChannels() }
-        vertx.setPeriodic(10) { _ -> flushAckBuffer() }
-    }
-    
-    private fun pruneSplittedDatagrams() {
-        incompleteSplits.values.removeIf { System.currentTimeMillis() - it.timestamp > 5000L }
-    }
-    
-    fun queueDatagramReceive(buffer: Buffer) {
-        receiveQueue.add(buffer)
-    }
-    
-    private fun processDatagramReceiveQueue() {
-        while(true) {
-            val datagram = receiveQueue.poll() ?: break
-            decodeRaknetDatagram(datagram)
-        }
+
+    override fun onStart(vertx: Vertx) {
+        vertx.setPeriodic(10) { _ -> processPacketSendQueue() }
     }
 
-    private fun decodeRaknetDatagram(buffer: Buffer) {
-        val mcStream = MinecraftInputStream(buffer.bytes)
-        
-        val headerFlags = RakDatagramFlags(mcStream.readByte())
-        if(headerFlags.userPacket) {
-            if(headerFlags.ack) {
-                handleRakAcknowledge(mcStream)
-            }
-            else if(headerFlags.nack) {
-                handleRakNotAcknowledge(mcStream)
-            }
-            else {
-                val datagramSeqNo = mcStream.read3BytesInt()
-                val datagram = RakDatagram(headerFlags, datagramSeqNo, mcStream.readRemainingBytes())
-                processConnectedDatagram(datagram)
-            }
-        }
-        else {
-            handleRakNetPacket(headerFlags, mcStream)
-        }
+    override fun getUnconnectedPongExtraData(serverId: Long): ByteArray {
+        val color = "§c"
+        val extra = ServerListPongExtraData(
+                motdFirstLine = "$color❤ §a§lHELLO WORLD $color❤",
+                motdSecondLine = "§eCONNECT",
+                version = "1.0.0.7",
+                onlinePlayers = 0,
+                maxPlayers = 1000,
+                serverId = serverId
+        )
+        return extra.serialized()
     }
 
-    private fun handleRakAcknowledge(mcStream: MinecraftInputStream) {
-        val ack = AckPePacket.Codec.deserialize(mcStream) as AckPePacket
-        ack.datagramSeqNos.forEach { 
-            val acked = needAcks.remove(it) ?: return@forEach
-            lastFewRoundTrips.add(acked.sinceLastSend)
-        }
-    }
-
-    private fun handleRakNotAcknowledge(mcStream: MinecraftInputStream) {
-        println("nack")
-        if(Duration.between(Instant.now(), lastNack) > roundTripTime)
-            datagramsPerSendLoop = Math.max(1, (datagramsPerSendLoop * 0.8).toInt())
-        lastNack = Instant.now()        
-    }
-
-    private val supportedReliabilities = setOf(RELIABLE, RELIABLE_ORDERED, UNRELIABLE)
-    
-    private fun processConnectedDatagram(datagram: RakDatagram) {
-        val mcStream = datagram.dataAsStream
-        
-        queueAck(datagram.sequenceNumber)
-
-        val messages = ArrayList<RakMessage>(6)
-        while(mcStream.available() != 0) {
-            val message = RakMessage.Codec.deserialize(mcStream)
-            
-            val reliability = message.headerFlags.reliability
-            if(! supportedReliabilities.contains(reliability))
-                throw NotImplementedError("$reliability message reliability is not supported!")
-            
-            if(message.headerFlags.hasSplit) {
-                val (splitsCount, splitsId, splitIndex) = message.splits!!
-                
-                val splitMessage = incompleteSplits.computeIfAbsent(splitsId) { SplittedMessage(splitsId, splitsCount) }
-                splitMessage.addSplit(splitIndex, message)
-                
-                val full = splitMessage.full
-                if(full != null) {
-                    println("Completed a split message")
-                    messages.add(full)
-                    incompleteSplits.remove(splitsId)
-                }
-            }
-            else {
-                messages.add(message)
-            }
-        }
-
-        messages.forEach {
-            if(it.headerFlags.reliability.ordered) {
-                val metaOrder = it.order!!
-                val channel = metaOrder.channel
-                if(channel >= 100) throw IllegalStateException("Ordering channel too high!")
-                val orderChannel = orderingChannels.computeIfAbsent(channel) { OrderingChannel(channel) }
-                orderChannel.add(it)
-            }
-            else {
-                handlePePayload(it.dataAsStream)
-            }
-        }
-    }
-    
-    fun processOrderingChannels() {
-        orderingChannels.values.forEach { 
-            val message = it.poll() ?: return@forEach
-            handlePePayload(message.dataAsStream)
-        }
-    }
-    
-    private fun handlePePayload(mcStream: MinecraftInputStream) {
-        val id = mcStream.read()
+    override fun onPayload(payload: MinecraftInputStream) {
+        val id = payload.read()
         val codec = ServerBoundPeTopLevelPackets.idToCodec[id]
         if(codec == null) {
             println("Unknown pe message id $id")
             return
         }
-        val message = codec.deserialize(mcStream)
+        val message = codec.deserialize(payload)
         handlePeMessage(message)
     }
-
+    
     private fun handlePeMessage(message: PePacket) {
         if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerPositionPePacket)
             println("${System.currentTimeMillis()} HANDLE ${message::class.java.simpleName}")
         when(message) {
             is ConnectedPingPePacket -> {
                 val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
-                sendNow(response, UNRELIABLE)
+                send(response, UNRELIABLE)
             }
             is NewIncomingConnection -> {
                 println("A client at ${address.host()} is now officially connected!")
@@ -221,14 +92,14 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                         incommingTimestamp = message.timestamp,
                         serverTimestamp = System.currentTimeMillis()
                 )
-                sendNow(response, RELIABLE)
+                send(response, RELIABLE)
             }
             is EncryptionWrapperPePacket -> {
                 if(encrypted) {
                     throw NotImplementedError("Encryption not supported yet!")
                 } else {
                     val payloadStream = MinecraftInputStream(message.payload)
-                    handlePePayload(payloadStream)
+                    onPayload(payloadStream)
                     if(payloadStream.available() != 0)
                         throw IllegalStateException("at least ${payloadStream.available()} remaining in an encryption wrapper")
                 }
@@ -339,7 +210,6 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                 println("Requested chunk radius: ${message.desiredChunkRadius}")
                 val chunkRadius = 5
                 queueSend(SetChunkRadiusPePacket(chunkRadius))
-                //sendNow(EncryptionWrapperPePacket(CompressionWrapperPePacket(SetChunkRadiusPePacket(chunkRadius)).serializedWithId()), RELIABLE_ORDERED)
                 val squareRange = (-chunkRadius..chunkRadius)
                 var sent = 0
                 squareRange.forEach { chunkX ->
@@ -404,7 +274,7 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
                         val batched = CompressionWrapperPePacket(chunkPacket)
                         val compressed = batched.serializedWithId(Deflater.BEST_COMPRESSION)
 
-                        sendNow(EncryptionWrapperPePacket(compressed), RELIABLE_ORDERED)
+                        send(EncryptionWrapperPePacket(compressed), RELIABLE_ORDERED)
                         if(sent++ == 56) {
                             queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
                         }
@@ -423,89 +293,17 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         }
     }
 
-    private fun handleRakNetPacket(header: RakDatagramFlags, mcStream: MinecraftInputStream) {
-        val codec = ServerBoundPeRaknetPackets.idToCodec[header.packetId.toInt()]
-        if(codec == null) {
-            println("Unknown pe raknet packet id ${header.packetId}")
-            return
-        }
-
-        val packet = codec.deserialize(mcStream)
-        handleUnconnectedPacket(packet)
-    }
-
-    private var count = 0
-    private fun handleUnconnectedPacket(packet: PePacket) {
-        when(packet) {
-            is UnconnectedPingClientPePacket -> {
-                val serverId = address.hashCode().toLong()
-                val color = if(count % 2 == 0) "§c" else "§4"
-                val motdFirstLine = "$color❤ §a§lHELLO WORLD $color❤"
-                val motdSecondLine = "§eCONNECT ${count++}"
-                val onlinePlayers = 0
-                val maxPlayers = 1000
-                val serverListData = "MCPE;$motdFirstLine;100;1.0.0.7;$onlinePlayers;$maxPlayers;$serverId;$motdSecondLine;Survival;"
-                val reply = UnconnectedPongServerPePacket(packet.pingId, serverId, serverListData)
-                sendNowPlain(reply)
-            }
-            is OpenConnectionRequest1PePacket -> {
-                println("open connection request 1 mtu ${packet.mtuSize}")
-                mtuSize = packet.mtuSize - 68
-                val reply = OpenConnectionReply1PePacket(1234, false, packet.mtuSize)
-                sendNowPlain(reply)
-            }
-            is OpenConnectionRequest2PePacket -> {
-                println("open connection request 2")
-                val reply = OpenConnectionReply2PePacket(1234, address, packet.mtuSize, false)
-                sendNowPlain(reply)
-            }
-            else -> {
-                println("unhandled packet ${packet.javaClass.name}")
-            }
-        }
-    }
-
-    fun queueAck(seqNo: Int) {
-        receiveAckBuffer.add(seqNo)
-    }
-    
-    fun flushAckBuffer() {
-        if(receiveAckBuffer.isEmpty()) return
-        val ack = AckPePacket(receiveAckBuffer)
-        sendNowPlain(ack)
-        receiveAckBuffer.clear()
-    }
-
-    fun queueDatagram(datagram: RakDatagram) {
-        datagramSendQueue.add(datagram)
-        var sent = needAcks[datagram.sequenceNumber]
-        if(sent == null) {
-            sent = RakSentDatagram(datagram, this)
-            needAcks[datagram.sequenceNumber] = sent
-        }
-        sent.incSend()
-    }
-    
-    fun processDatagramSendQueue() {
-        if(System.currentTimeMillis() % 500 == 0L)
-            datagramsPerSendLoop = Math.min(128, datagramsPerSendLoop + 1)
-        (1..datagramsPerSendLoop).forEach { 
-            val datagram = datagramSendQueue.poll() ?: return
-            socket.send(Buffer.buffer(datagram.serialized()), address.port(), address.host()) {}
-        }
-    }
-
     fun queueSend(packet: PePacket) {
         require(packet !is CompressionWrapperPePacket) { "can't queue up compression wrappers, send them directly or queue their decompressed content" }
         packetSendQueue.add(packet)
         println("${System.currentTimeMillis()} QUEUE ${packet::class.java.simpleName}")
     }
-    
+
     private fun processPacketSendQueue() {
         val size = packetSendQueue.size
         if(size == 0)
             return
-        
+
         val wrappedPacket = if(size == 1) {
             EncryptionWrapperPePacket(packetSendQueue[0].serializedWithId())
         } else {
@@ -513,77 +311,10 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
             EncryptionWrapperPePacket(batched.serializedWithId())
         }
 
-        sendNow(wrappedPacket, RELIABLE_ORDERED)
+        send(wrappedPacket, RakMessageReliability.RELIABLE_ORDERED)
         packetSendQueue.clear()
     }
 
-    fun sendNow(packet: PePacket, reliability: RakMessageReliability) {
-        val message = RakMessage(
-                RakMessageFlags(reliability),
-                if(reliability.reliable) RakMessage.MetaReliability(messageSeqNo++) else null,
-                if(reliability.ordered) RakMessage.MetaOrder(messageOrderIndex++, channel = 0) else null,
-                null,
-                packet.serializedWithId()
-        )
-        val datagrams = binpackMessagesInDatagrams(message)
-        datagrams.forEach { queueDatagram(it) }
-    }
-
-    private fun binpackMessagesInDatagrams(vararg messages: RakMessage) : List<RakDatagram> {
-        val maxSize = mtuSize - RakDatagram.headerSize
-        
-        val messagesWithSplits = splitLargeMessages(messages, maxSize)
-        messagesWithSplits.sortedByDescending { it.size }
-        
-        val groups = mutableListOf<ByteArrayOutputStream>()
-        messagesWithSplits.forEach { message ->
-            val group = groups.firstOrCompute(
-                    { it.size() + message.size <= maxSize }, 
-                    { ByteArrayOutputStream(maxSize) }
-            )
-            message.serialize(MinecraftOutputStream(group))
-        }
-        
-        return groups.mapIndexed { index, bs -> 
-            val headerFlags = if(index == 0) RakDatagramFlags.nonContinuousUserDatagram else RakDatagramFlags.continuousUserDatagram
-            RakDatagram(headerFlags, datagramSeqNo++, bs.toByteArray())
-        }
-    }
-
-    private fun splitLargeMessages(packets: Array<out RakMessage>, maxSize: Int) : List<RakMessage> {
-        return packets.flatMap { packet ->
-            if(packet.size < maxSize) listOf(packet)
-            else {
-                val splitId = messageSplitId++
-                var splitsCount = Math.ceil((packet.size.toDouble() / maxSize)).toInt()
-                val overheadFromSplitting = splitsCount * RakMessage.MetaSplits.size
-                if(packet.size + overheadFromSplitting > splitsCount * maxSize) ++splitsCount
-                
-                (0 until splitsCount).map { splitIndex ->
-                    val dataIndex = splitIndex * (maxSize - RakMessage.MetaSplits.size)
-                    val splitData = packet.data.copyOfRange(
-                            dataIndex,
-                            dataIndex + Math.min(maxSize, packet.data.size - dataIndex))
-                    RakMessage(
-                            RakMessageFlags(packet.headerFlags.reliability, hasSplit = true),
-                            RakMessage.MetaReliability(messageSeqNo++),
-                            packet.order,
-                            RakMessage.MetaSplits(splitsCount, splitId, splitIndex),
-                            splitData
-                    )
-                }
-            }
-        }
-    }
-
-    fun sendNowPlain(packet: PePacket) {
-        if(packet !is AckPePacket && packet !is UnconnectedPongServerPePacket)
-            println("${System.currentTimeMillis()} OUT unconnected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
-
-        val serialized = packet.serializedWithId()
-        socket.send(Buffer.buffer(serialized), address.port(), address.host()) {}
-    }
-    
     /*
     fun sendEncrypted(packet: PePacket) {
         val byteStream = ByteArrayOutputStream()
@@ -601,27 +332,8 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         wrapperMcStream.writeByte(EncryptionWrapperPePacket.Codec.id)
         wrapperMcStream.write(encryptedPacket)
         
-        val dByteStream = ByteArrayOutputStream()
-        val dMcStream = MinecraftOutputStream(dByteStream)
-
-        dMcStream.writeByte(RakDatagramFlags.nonContinuousUserDatagram)
-        dMcStream.write3BytesInt(datagramSeqNo++)
-        
-        val reliability = RakMessageReliability.RELIABLE_ORDERED
-
-        val message = RakMessage(
-                RakMessageFlags(reliability, hasSplit = false),
-                if(reliability.reliable) RakMessage.MetaReliability(messageSeqNo++) else null,
-                if(reliability.ordered) RakMessage.MetaOrder(messageOrderIndex++, channel = 0) else null,
-                null,
-                wrapperByteStream.toByteArray()
-        )
-        message.serialize(dMcStream)
-
-        println("${System.currentTimeMillis()} OUT encrypted+connected ${packet.javaClass.simpleName} ${packet.id.toByte().toHexStr()}")
-        socket.send(Buffer.buffer(dByteStream.toByteArray()), address.port(), address.host()) {}
+        ...
     }
-    */
     
     private fun createTrailer(payload: ByteArray, senderCounter: Long, secretKey: SecretKey) : ByteArray {
         val sha256 = MessageDigest.getInstance("SHA-256")
@@ -630,15 +342,7 @@ class PeNetworkSession(val server: PeConnectionServer, val socket: DatagramSocke
         sha256.update(secretKey.encoded)
         return sha256.digest()
     }
-
-    fun processResends() {
-        val ackTimeoutMs = Math.max(10, roundTripTime.toMillis() * 2)
-        needAcks.values.forEach { sentDatagram ->
-            if(sentDatagram.sinceLastSend.toMillis() > ackTimeoutMs) {
-                queueDatagram(sentDatagram.datagram)
-            }
-        }
-    }
+    */
     
     companion object {
         private val mojangPubKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(

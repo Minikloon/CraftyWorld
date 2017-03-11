@@ -1,10 +1,10 @@
 package world.crafty.pe.raknet
 
-import world.crafty.pe.PeNetworkSession
+import world.crafty.pe.raknet.session.RakNetworkSession
 import java.time.Duration
 import java.time.Instant
 
-class RakSentDatagram(val datagram: RakDatagram, val recipient: PeNetworkSession, firstSend: Instant = Instant.now()) {
+class RakSentDatagram(val datagram: RakDatagram, val recipient: RakNetworkSession, firstSend: Instant = Instant.now()) {
     private val sends = mutableListOf<Instant>()
     init {
         sends.add(firstSend)

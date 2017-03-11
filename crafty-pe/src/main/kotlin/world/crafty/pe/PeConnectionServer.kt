@@ -27,11 +27,8 @@ class PeConnectionServer(val port: Int) : AbstractVerticle() {
         socket = vertx.createDatagramSocket()
         socket.listen(port, "0.0.0.0") {
             if(it.succeeded()) {
-                socket.handler {
-                    val data = it.data()
-                    val sender = it.sender()
-                    if(data == null || sender == null)
-                        return@handler
+                socket.handler { datagram ->
+                    val sender = datagram.sender()
                     val getSession = sessions.getOrPut(sender) {
                         val future = CompletableFuture<PeNetworkSession>()
                         val session = PeNetworkSession(this, socket, sender)
@@ -42,7 +39,7 @@ class PeConnectionServer(val port: Int) : AbstractVerticle() {
                     }
                     getSession.thenAcceptAsync {
                         val session = it
-                        session.queueDatagramReceive(data)
+                        session.queueReceivedDatagram(datagram)
                     }
                 }
             } else {
