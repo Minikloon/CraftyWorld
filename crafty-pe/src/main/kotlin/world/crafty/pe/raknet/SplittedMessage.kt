@@ -1,6 +1,6 @@
 package world.crafty.pe.raknet
 
-import world.crafty.common.utils.kotlin.lazyIf
+import world.crafty.common.kotlin.lazyIf
 
 class SplittedMessage(val id: Short, splits: Int, val timestamp: Long = System.currentTimeMillis()) {
     private val parts: Array<RakMessage?> = Array(splits) { null }

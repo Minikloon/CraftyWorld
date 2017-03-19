@@ -4,8 +4,8 @@ import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.utils.NibbleArray
 import world.crafty.nbt.NbtInputStream
 import world.crafty.nbt.tags.*
-import world.crafty.pc.world.ChunkColumn
-import world.crafty.pc.world.ChunkSection
+import world.crafty.pc.world.PcChunkColumn
+import world.crafty.pc.world.PcChunk
 import world.crafty.pc.world.Location
 import world.crafty.pc.world.World
 import java.io.File
@@ -30,7 +30,7 @@ fun loadWorld(folder: String) : World {
 }
 
 data class ChunkEntry(val offset: Int, val size: Int)
-fun readRegion(file: File) : List<ChunkColumn> {
+fun readRegion(file: File) : List<PcChunkColumn> {
     val regionBytes = file.readBytes()
     val regionStream = MinecraftInputStream(regionBytes)
     val chunkEntries = (0 until 1024).map {
@@ -49,15 +49,15 @@ fun readRegion(file: File) : List<ChunkColumn> {
         val chunkNbtStream = NbtInputStream(compressionStream)
         val chunkCompound = (chunkNbtStream.readTag() as NbtCompound)["Level"] as NbtCompound
         readChunk(chunkCompound)
-    }.collect(Collectors.toList<ChunkColumn>())
+    }.collect(Collectors.toList<PcChunkColumn>())
 }
 
-fun readChunk(nbt: NbtCompound) : ChunkColumn {
+fun readChunk(nbt: NbtCompound) : PcChunkColumn {
     val chunkX = (nbt["xPos"] as NbtInt).value
     val chunkZ = (nbt["zPos"] as NbtInt).value
 
     val biomes = (nbt["Biomes"] as NbtByteArray).value
-    val sections = arrayOfNulls<ChunkSection>(16)
+    val sections = arrayOfNulls<PcChunk>(16)
 
     (nbt["Sections"] as NbtList).forEach {
         val sectionCompound = it as NbtCompound
@@ -66,7 +66,7 @@ fun readChunk(nbt: NbtCompound) : ChunkColumn {
         val blockLight = NibbleArray((sectionCompound["BlockLight"] as NbtByteArray).value)
         val skyLight = NibbleArray((sectionCompound["SkyLight"] as NbtByteArray).value)
 
-        val section = ChunkSection(blockLight, skyLight)
+        val section = PcChunk(blockLight, skyLight)
 
         val blocksId = MinecraftInputStream((sectionCompound["Blocks"] as NbtByteArray).value)
         val blocksData = NibbleArray((sectionCompound["Data"] as NbtByteArray).value)
@@ -84,7 +84,7 @@ fun readChunk(nbt: NbtCompound) : ChunkColumn {
         sections[sectionY] = section
     }
 
-    val chunk = ChunkColumn(chunkX, chunkZ, sections, biomes)
+    val chunk = PcChunkColumn(chunkX, chunkZ, sections, biomes)
 
     return chunk
 }

@@ -20,7 +20,7 @@
                 <option name="addCompilerBuiltIns" value="true" />
                 <option name="languageVersion" value="1.1" />
                 <option name="apiVersion" value="1.1" />
-                <option name="coroutinesWarn" value="true" />
+                <option name="coroutinesEnable" value="true" />
               </K2JVMCompilerArguments>
             </option>
             <option name="_commonCompilerArguments">
@@ -30,7 +30,7 @@
                 <option name="pluginClasspaths">
                   <array />
                 </option>
-                <option name="coroutinesWarn" value="true" />
+                <option name="coroutinesEnable" value="true" />
                 <option name="pluginOptions">
                   <array />
                 </option>
@@ -59,10 +59,12 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="module" module-name="crafty-nbt_main" />
+    <orderEntry type="library" name="Gradle: org.jetbrains.kotlinx:kotlinx-coroutines-core:0.14" level="project" />
+    <orderEntry type="library" name="Gradle: com.fasterxml.jackson.core:jackson-databind:2.8.4" level="project" />
     <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-stdlib-jre8:1.1.0" level="project" />
-    <orderEntry type="module" module-name="crafty-common_main" />
-    <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-stdlib-jre7:1.1.0" level="project" />
+    <orderEntry type="library" name="Gradle: io.netty:netty-codec-http:4.1.5.Final" level="project" />
+    <orderEntry type="library" name="Gradle: io.netty:netty-codec-http2:4.1.5.Final" level="project" />
+    <orderEntry type="library" name="Gradle: io.netty:netty-resolver:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.vertx:vertx-core:3.3.3" level="project" />
     <orderEntry type="library" name="Gradle: com.fasterxml.jackson.module:jackson-module-kotlin:2.8.4" level="project" />
     <orderEntry type="library" name="Gradle: org.joml:joml:1.9.2" level="project" />
@@ -72,9 +74,7 @@
     <orderEntry type="library" name="Gradle: io.netty:netty-transport:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-handler:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-handler-proxy:4.1.5.Final" level="project" />
-    <orderEntry type="library" name="Gradle: io.netty:netty-codec-http:4.1.5.Final" level="project" />
-    <orderEntry type="library" name="Gradle: io.netty:netty-codec-http2:4.1.5.Final" level="project" />
-    <orderEntry type="library" name="Gradle: io.netty:netty-resolver:4.1.5.Final" level="project" />
+    <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-stdlib-jre7:1.1.0" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-resolver-dns:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: com.fasterxml.jackson.core:jackson-annotations:2.8.0" level="project" />
     <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-reflect:1.0.3" level="project" />
@@ -82,7 +82,7 @@
     <orderEntry type="library" name="Gradle: io.netty:netty-codec:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-codec-socks:4.1.5.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-codec-dns:4.1.5.Final" level="project" />
-    <orderEntry type="library" name="Gradle: com.fasterxml.jackson.core:jackson-databind:2.8.4" level="project" />
+    <orderEntry type="module" module-name="crafty-common_main" />
     <orderEntry type="library" name="Gradle: com.fasterxml.jackson.core:jackson-core:2.8.4" level="project" />
   </component>
   <component name="TestModuleProperties" production-module="crafty-nbt_main" />

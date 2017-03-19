@@ -8,9 +8,11 @@ import world.crafty.pc.proto.packets.server.ServerKeepAlivePcPacket
 import world.crafty.pc.mojang.MojangClient
 import world.crafty.pc.world.World
 import java.io.ByteArrayOutputStream
+import java.time.Duration
+import java.time.Instant
 import javax.crypto.Cipher
 
-class PcConnectionServer(val port: Int, val world: World) : AbstractVerticle() {
+class PcConnectionServer(val port: Int, val world: World, val worldServer: String) : AbstractVerticle() {
     lateinit var server: NetServer
     val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
 
@@ -35,20 +37,22 @@ class PcConnectionServer(val port: Int, val world: World) : AbstractVerticle() {
         mojang = MojangClient(vertx)
 
         server = vertx.createNetServer()
-        server.connectHandler() {
-            val session = PcNetworkSession(this, it)
+        server.connectHandler {
+            val session = PcNetworkSession(this, worldServer, it)
             sessions[it] = session
+            it.handler({ session.receive(it) })
             println("Received PC connection from ${it.remoteAddress()}")
         }
         server.listen(port)
 
         vertx.setPeriodic(1000) {
-            for(session in sessions.values.filter { it.state == PcNetworkSession.State.PLAY })
+            sessions.values.filter { it.state == PcNetworkSession.State.PLAY }.forEach { session ->
                 session.send(ServerKeepAlivePcPacket(0))
+            }
         }
 
         vertx.setPeriodic(1000) {
-            val toRemove = sessions.filter { it.value.lastUpdate.elapsed.seconds > 3500 }
+            val toRemove = sessions.filter { it.value.lastUpdate.elapsed.seconds > 3 }
             for(key in toRemove.keys)
                 sessions.remove(key)
         }

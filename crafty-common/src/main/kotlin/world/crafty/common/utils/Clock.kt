@@ -7,7 +7,7 @@ class Clock(var start: Instant) {
     constructor() : this(Instant.now())
 
     val elapsed: Duration
-        get() = Duration.between(Instant.now(), start)
+        get() = start.sinceThen()
 
     // returns elapsed ms
     fun reset() : Duration {

@@ -1,8 +1,25 @@
 group 'world.crafty'
 version '1.0-SNAPSHOT'
 
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
+    }
+}
+
+apply plugin: 'com.github.johnrengelman.shadow'
+
 dependencies {
     compile project(":crafty-pe")
     compile project(":crafty-pc")
     compile project(":crafty-server")
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'world.crafty.bootstrap.MainKt'
+    }
 }

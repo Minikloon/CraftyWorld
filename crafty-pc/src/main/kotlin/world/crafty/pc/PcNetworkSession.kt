@@ -3,6 +3,9 @@ package world.crafty.pc
 import io.vertx.core.Handler
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.net.NetSocket
+import kotlinx.coroutines.experimental.channels.Channel
+import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.experimental.runBlocking
 import org.joml.Vector3i
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
@@ -13,8 +16,15 @@ import world.crafty.pc.proto.packets.client.*
 import world.crafty.pc.proto.packets.server.*
 import world.crafty.pc.world.Location
 import world.crafty.pc.metadata.PlayerMetadata
+import world.crafty.proto.client.JoinRequestCraftyPacket
+import world.crafty.proto.server.JoinResponseCraftyPacket
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import world.crafty.common.utils.sinceThen
+import world.crafty.common.vertx.VertxContext
+import world.crafty.common.vertx.vx
+import world.crafty.common.vertx.vxm
+import java.time.Instant
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
 import javax.crypto.Cipher
@@ -23,7 +33,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class PcNetworkSession(val server: PcConnectionServer, private val socket: NetSocket) {
+class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, private val socket: NetSocket) {
     var state: State = HANDSHAKE
     val lastUpdate = Clock()
 
@@ -39,10 +49,11 @@ class PcNetworkSession(val server: PcConnectionServer, private val socket: NetSo
 
     private lateinit var username : String
     private lateinit var brand : String
+    
+    private val eb = server.vertx.eventBus()
 
     init {
         sessionId = Common.sessionIds.incrementAndGet().toString()
-        socket.handler({ receive(it) })
     }
 
     fun receive(buffer: Buffer) {
@@ -67,29 +78,32 @@ class PcNetworkSession(val server: PcConnectionServer, private val socket: NetSo
         socket.write(Buffer.buffer(bytes))
     }
 
-    val uncompressedHandler = LengthPrefixedHandler() {
-        val stream = ByteArrayInputStream(it.bytes)
-        val reader = MinecraftInputStream(stream)
+    val uncompressedHandler = LengthPrefixedHandler {
+        launch(VertxContext) {
+            val stream = ByteArrayInputStream(it.bytes)
+            val reader = MinecraftInputStream(stream)
 
-        val packetId = reader.readUnsignedVarInt()
+            val packetId = reader.readUnsignedVarInt()
 
-        val codec = state.pcPacketList.idToCodec[packetId]
-        if(codec == null) {
-            println("Unknown packet id $packetId while in state $state")
-            return@LengthPrefixedHandler
+            val codec = state.pcPacketList.idToCodec[packetId]
+            if(codec == null) {
+                println("Unknown packet id $packetId while in state $state")
+                return@launch
+            }
+
+            val packet = codec.deserialize(stream)
+            if(packet !is ClientKeepAlivePcPacket && packet !is PlayerPositionPcPacket && packet !is PlayerPosAndLookPcPacket && packet !is PlayerLookPcPacket)
+                println("received ${packet.javaClass.simpleName}")
+
+            when (state) {
+                HANDSHAKE -> handleHandshakePacket(packet)
+                STATUS -> handleStatusPacket(packet)
+                LOGIN -> handleLoginPacket(packet)
+                PLAY -> handlePlayPacket(packet)
+            }
+
+            lastUpdate.reset()
         }
-
-        val packet = codec.deserialize(stream)
-        println("received ${packet.javaClass.simpleName}")
-
-        when(state) {
-            HANDSHAKE -> handleHandshakePacket(packet)
-            STATUS -> handleStatusPacket(packet)
-            LOGIN -> handleLoginPacket(packet)
-            PLAY -> handlePlayPacket(packet)
-        }
-
-        lastUpdate.reset()
     }
 
     private fun handleHandshakePacket(packet: PcPacket) {
@@ -111,16 +125,16 @@ class PcNetworkSession(val server: PcConnectionServer, private val socket: NetSo
         when (packet) {
             is StatusRequestPcPacket -> {
                 println("Received server list request from ${socket.remoteAddress()}")
-
+                
                 val lpr = StatusResponsePcPacket(
                         StatusResponsePcPacket.ServerVersion(
-                                name = "1.10",
-                                protocol = 210
+                                name = "§l1.11.2+",
+                                protocol = 316
                         ), StatusResponsePcPacket.PlayerStatus(
                         max = 1337,
                         online = 1336
                         ),StatusResponsePcPacket.Description(
-                            text = "Minicraft Servah"
+                            text = "first line \nsecond line"
                         )
                 )
 
@@ -135,7 +149,7 @@ class PcNetworkSession(val server: PcConnectionServer, private val socket: NetSo
         }
     }
 
-    private fun handleLoginPacket(packet: PcPacket) {
+    private suspend fun handleLoginPacket(packet: PcPacket) {
         when (packet) {
             is LoginStartPcPacket -> {
                 username = packet.username
@@ -155,75 +169,77 @@ class PcNetworkSession(val server: PcConnectionServer, private val socket: NetSo
                 println("Now encrypting with ${socket.remoteAddress()}")
 
                 val serverId = server.mojang.getServerIdHash(sessionId, sharedSecret, server.x509PubKey)
-                server.mojang.checkHasJoined(username, serverId, Handler {
-                    if(it.succeeded()) {
-                        println("mojang replied to $username auth")
-                        val profile = it.result()
-                        state = PLAY
-                        send(LoginSuccessPcPacket(profile.uuid, profile.name))
-                        send(JoinGamePcPacket(3, 1, 0, 0, 20, "flat", false))
-                        send(ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
+                val profile = server.mojang.checkHasJoinedAsync(username, serverId)
+                
+                println("mojang replied to $username auth")
+                
+                val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false), it) }
 
-                        val world = server.world
-                        val spawnPos = world.spawn
+                if(!craftyResponse.accepted)
+                    throw IllegalStateException("Crafty refused us from joining") // TODO: handle failure
+                
+                send(LoginSuccessPcPacket(profile.uuid, profile.name))
+                state = PLAY
+                
+                send(JoinGamePcPacket(3, 1, 0, 0, 20, "flat", false))
+                send(ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
 
-                        loc = spawnPos
+                val world = server.world
+                val spawnPos = world.spawn
 
-                        send(SetSpawnPositionPcPacket(Vector3i(spawnPos.x.toInt(), spawnPos.y.toInt(), spawnPos.z.toInt())))
+                loc = spawnPos
 
-                        val toSend = world.chunks.filter { (it.x - spawnPos.x/16) * (it.x - spawnPos.x/16) + (it.z - spawnPos.z/16) * (it.z - spawnPos.z/16) < 8*8 }
-                        toSend.map { it.toPacket() }.forEach { send(it) }
+                send(SetSpawnPositionPcPacket(Vector3i(spawnPos.x.toInt(), spawnPos.y.toInt(), spawnPos.z.toInt())))
 
-                        send(ServerChatMessagePcPacket(McChat("Welcome!"), ChatPosition.CHAT_BOX))
-                        send(PlayerListHeaderFooterPcPacket(McChat("Header"), McChat("Footer")))
+                val toSend = world.chunks.filter { (it.x - spawnPos.x/16) * (it.x - spawnPos.x/16) + (it.z - spawnPos.z/16) * (it.z - spawnPos.z/16) < 8*8 }
+                toSend.map { it.toPacket() }.forEach { send(it) }
 
-                        val playerMetadata = PlayerMetadata(
-                                status = 0,
-                                air = 0,
-                                name = "",
-                                nameVisible = false,
-                                silent = false,
-                                gravity = true,
-                                handStatus = 0b01,
-                                health = 20f,
-                                potionEffectColor = 0,
-                                potionEffectAmbient = false,
-                                insertedArrows = 3,
-                                extraHearts = 0,
-                                score = 0,
-                                mainHand = 0,
-                                skinParts = 0b1111111
+                send(ServerChatMessagePcPacket(McChat("Welcome!"), ChatPosition.CHAT_BOX))
+                send(PlayerListHeaderFooterPcPacket(McChat("Header"), McChat("Footer")))
+
+                val playerMetadata = PlayerMetadata(
+                        status = 0,
+                        air = 0,
+                        name = "",
+                        nameVisible = false,
+                        silent = false,
+                        gravity = true,
+                        handStatus = 0b01,
+                        health = 20f,
+                        potionEffectColor = 0,
+                        potionEffectAmbient = false,
+                        insertedArrows = 3,
+                        extraHearts = 0,
+                        score = 0,
+                        mainHand = 0,
+                        skinParts = 0b1111111
+                )
+
+                server.sessions.values.forEach {
+                    it.send(PlayerListItemPcPacket(0, listOf(
+                            PlayerListItemPcPacket.PlayerListItemAdd(
+                                    uuid = profile.uuid,
+                                    name = profile.name,
+                                    properties = profile.properties,
+                                    gamemode = 1,
+                                    ping = 30
+                            )
+                    )))
+                    if(it != this) {
+                        it.send(SpawnPlayerPcPacket(
+                                4,
+                                profile.uuid,
+                                spawnPos.x,
+                                spawnPos.y,
+                                spawnPos.z,
+                                0,
+                                0,
+                                playerMetadata)
                         )
-
-                        server.sessions.values.forEach {
-                            it.send(PlayerListItemPcPacket(0, listOf(
-                                    PlayerListItemPcPacket.PlayerListItemAdd(
-                                            uuid = profile.uuid,
-                                            name = profile.name,
-                                            properties = profile.properties,
-                                            gamemode = 1,
-                                            ping = 30
-                                    )
-                            )))
-                            if(it != this) {
-                                it.send(SpawnPlayerPcPacket(
-                                        4,
-                                        profile.uuid,
-                                        spawnPos.x,
-                                        spawnPos.y,
-                                        spawnPos.z,
-                                        0,
-                                        0,
-                                        playerMetadata)
-                                )
-                            }
-                        }
-
-                        send(TeleportPlayerPcPacket(spawnPos, 0, 1))
-                    } else {
-                        it.cause().printStackTrace()
                     }
-                })
+                }
+
+                send(TeleportPlayerPcPacket(spawnPos, 0, 1))
             }
             else -> {
                 println("Unhandled Login packet ${packet.javaClass.simpleName}")

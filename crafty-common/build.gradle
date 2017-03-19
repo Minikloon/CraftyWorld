@@ -1,8 +1,13 @@
 group 'world.crafty'
 version '1.0-SNAPSHOT'
 
+repositories {
+    jcenter()
+}
+
 dependencies {
     compile "io.vertx:vertx-core:3.3.3"
     compile "com.fasterxml.jackson.module:jackson-module-kotlin:2.8.4"
     compile "org.joml:joml:1.9.2"
+    compile 'org.jetbrains.kotlinx:kotlinx-coroutines-core:0.14'
 }

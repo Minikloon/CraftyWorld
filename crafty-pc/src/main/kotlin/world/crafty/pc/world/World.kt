@@ -1,5 +1,7 @@
 package world.crafty.pc.world
 
-class World(val chunks: List<ChunkColumn>, val spawn: Location) {
+import world.crafty.pc.world.PcChunkColumn
+
+class World(val chunks: List<PcChunkColumn>, val spawn: Location) {
 
 }

@@ -1,24 +1,17 @@
 package world.crafty.pc.mojang
 
-import io.vertx.core.AsyncResult
-import io.vertx.core.Future
-import io.vertx.core.Handler
 import io.vertx.core.Vertx
 import io.vertx.core.http.HttpClient
 import io.vertx.core.http.HttpClientOptions
 import io.vertx.core.json.JsonObject
-import world.crafty.pc.mojang.MojangProfile
 import java.math.BigInteger
 import java.security.MessageDigest
 import java.util.*
 import javax.crypto.spec.SecretKeySpec
+import kotlin.coroutines.experimental.suspendCoroutine
 
 class MojangClient(vertx: Vertx) {
-    private val https: HttpClient
-
-    init {
-        https = vertx.createHttpClient(HttpClientOptions().setSsl(true))
-    }
+    private val https: HttpClient = vertx.createHttpClient(HttpClientOptions().setSsl(true))
 
     fun getServerIdHash(sessionId: String, sharedSecret: SecretKeySpec, pubKey: ByteArray) : String {
         val serverIdDigest = MessageDigest.getInstance("SHA-1")
@@ -28,19 +21,15 @@ class MojangClient(vertx: Vertx) {
         return BigInteger(serverIdDigest.digest()).toString(16)
     }
 
-    fun checkHasJoined(username: String, serverId: String, handler: Handler<AsyncResult<MojangProfile>>) {
+    suspend fun checkHasJoinedAsync(username: String, serverId: String) = suspendCoroutine<MojangProfile> { c ->
         https.getNow(443, "sessionserver.mojang.com", "/session/minecraft/hasJoined?username=$username&serverId=$serverId", {
             it.bodyHandler {
                 val json = JsonObject(it.toString())
                 val profile = parseProfile(json)
-
-                val result = Future.succeededFuture(profile)
-                handler.handle(result)
+                c.resume(profile)
             }.exceptionHandler {
-                it.printStackTrace()
-                handler.handle(Future.failedFuture(it))
+                c.resumeWithException(it)
             }
-            println("checkHasJoin ${it.statusCode()} ${it.statusMessage()}")
         })
     }
 

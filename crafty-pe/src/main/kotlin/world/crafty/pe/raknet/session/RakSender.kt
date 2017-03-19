@@ -5,7 +5,7 @@ import io.vertx.core.buffer.Buffer
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.utils.EvictingQueue
 import world.crafty.common.utils.average
-import world.crafty.common.utils.kotlin.firstOrCompute
+import world.crafty.common.kotlin.firstOrCompute
 import world.crafty.pe.raknet.*
 import java.io.ByteArrayOutputStream
 import java.time.Duration

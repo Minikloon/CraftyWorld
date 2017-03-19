@@ -4,12 +4,16 @@ import world.crafty.pe.jwt.LoginExtraData
 import world.crafty.pe.raknet.RakMessageReliability.*
 import io.vertx.core.Vertx
 import io.vertx.core.datagram.DatagramSocket
+import io.vertx.core.eventbus.EventBus
 import io.vertx.core.net.SocketAddress
 import io.vertx.core.net.impl.SocketAddressImpl
+import kotlinx.coroutines.experimental.launch
 import org.joml.Vector2f
 import org.joml.Vector3f
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
+import world.crafty.common.vertx.VertxContext
+import world.crafty.common.vertx.vxm
 import world.crafty.pe.proto.PePacket
 import world.crafty.pe.proto.ServerBoundPeTopLevelPackets
 import world.crafty.pe.proto.ServerListPongExtraData
@@ -18,6 +22,8 @@ import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
 import world.crafty.pe.raknet.*
 import world.crafty.pe.raknet.session.RakNetworkSession
+import world.crafty.proto.client.JoinRequestCraftyPacket
+import world.crafty.proto.server.JoinResponseCraftyPacket
 import java.io.ByteArrayOutputStream
 import java.security.KeyFactory
 import java.security.MessageDigest
@@ -31,7 +37,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class PeNetworkSession(val server: PeConnectionServer, socket: DatagramSocket, address: SocketAddress) : RakNetworkSession(socket, address) {
+class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, socket: DatagramSocket, address: SocketAddress) : RakNetworkSession(socket, address) {
     private var loggedIn = false
     var loginExtraData: LoginExtraData? = null
         private set
@@ -43,8 +49,11 @@ class PeNetworkSession(val server: PeConnectionServer, socket: DatagramSocket, a
     private val sendCounter = AtomicLong(0)
     
     private val packetSendQueue = mutableListOf<PePacket>()
+    
+    private lateinit var eb: EventBus
 
     override fun onStart(vertx: Vertx) {
+        eb = vertx.eventBus()
         vertx.setPeriodic(10) { _ -> processPacketSendQueue() }
     }
 
@@ -69,10 +78,12 @@ class PeNetworkSession(val server: PeConnectionServer, socket: DatagramSocket, a
             return
         }
         val message = codec.deserialize(payload)
-        handlePeMessage(message)
+        launch(VertxContext) {
+            handlePeMessage(message)
+        }
     }
     
-    private fun handlePeMessage(message: PePacket) {
+    private suspend fun handlePeMessage(message: PePacket) {
         if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerPositionPePacket)
             println("${System.currentTimeMillis()} HANDLE ${message::class.java.simpleName}")
         when(message) {
@@ -112,13 +123,13 @@ class PeNetworkSession(val server: PeConnectionServer, socket: DatagramSocket, a
                 val rootCert = if(chain[0].payload.iss == "RealmsAuthorization") mojangPubKey else null
                 if(! isCertChainValid(chain, rootCert))
                     throw NotImplementedError("Should do something about invalid cert chain")
+
+                val claims = chain.last().payload
+
+                val clientKey = claims.idPubKey
+                loginExtraData = claims.extraData
                 
                 if(server.supportsEncryption) { // TODO encrypt if xuid exists
-                    val claims = chain.last().payload
-                    loginExtraData = claims.extraData
-
-                    val clientKey = claims.idPubKey
-
                     val agreement = KeyAgreement.getInstance("ECDH")
                     agreement.init(server.keyPair.private)
                     agreement.doPhase(clientKey, true)
@@ -151,7 +162,12 @@ class PeNetworkSession(val server: PeConnectionServer, socket: DatagramSocket, a
             }
             is ResourcePackClientResponsePePacket -> {
                 println("resource pack response status: ${message.status}")
-                val startGame = {
+                val startGame: suspend () -> Unit = {
+                    val username = loginExtraData?.displayName ?: throw IllegalStateException("ResourcePackClientResponse without prior login!")
+                    val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false), it) }
+                    if (!craftyResponse.accepted)
+                        throw IllegalStateException("CraftyServer denied our join request :(")
+
                     queueSend(StartGamePePacket(
                             entityId = 2,
                             runtimeEntityId = 0,

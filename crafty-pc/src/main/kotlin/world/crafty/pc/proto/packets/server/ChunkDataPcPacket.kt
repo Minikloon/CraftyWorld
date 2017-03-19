@@ -3,14 +3,14 @@ package world.crafty.pc.proto.packets.server
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.proto.PcPacket
-import world.crafty.pc.world.ChunkSection
+import world.crafty.pc.world.PcChunk
 
 class ChunkDataPcPacket(
         val x: Int,
         val z: Int,
         val continuous: Boolean,
         val chunkMask: Int,
-        val sections: Array<ChunkSection?>,
+        val sections: Array<PcChunk?>,
         val biomes: ByteArray?
 ) : PcPacket() {
     override val id = Codec.id

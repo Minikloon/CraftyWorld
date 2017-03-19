@@ -13,13 +13,19 @@ buildscript {
 
 subprojects  {
     apply plugin: 'kotlin'
-    
+
     repositories {
         mavenCentral()
     }
 
     dependencies {
         compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
+    }
+
+    kotlin {
+        experimental {
+            coroutines "enable"
+        }
     }
 }
 

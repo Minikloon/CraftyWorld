@@ -9,7 +9,7 @@ import java.security.KeyPairGenerator
 import java.security.spec.ECGenParameterSpec
 import java.util.concurrent.CompletableFuture
 
-class PeConnectionServer(val port: Int) : AbstractVerticle() {
+class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var socket: DatagramSocket
     val sessions: MutableMap<SocketAddress, CompletableFuture<PeNetworkSession>> = mutableMapOf()
     val supportsEncryption = false
@@ -31,7 +31,7 @@ class PeConnectionServer(val port: Int) : AbstractVerticle() {
                     val sender = datagram.sender()
                     val getSession = sessions.getOrPut(sender) {
                         val future = CompletableFuture<PeNetworkSession>()
-                        val session = PeNetworkSession(this, socket, sender)
+                        val session = PeNetworkSession(this, worldServer, socket, sender)
                         vertx.deployVerticle(session) {
                             future.complete(session)
                         }
