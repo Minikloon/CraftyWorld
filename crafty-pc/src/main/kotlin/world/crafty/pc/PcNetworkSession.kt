@@ -1,11 +1,9 @@
 package world.crafty.pc
 
-import io.vertx.core.Handler
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.net.NetSocket
-import kotlinx.coroutines.experimental.channels.Channel
+import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.runBlocking
 import org.joml.Vector3i
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
@@ -20,11 +18,10 @@ import world.crafty.proto.client.JoinRequestCraftyPacket
 import world.crafty.proto.server.JoinResponseCraftyPacket
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import world.crafty.common.utils.sinceThen
-import world.crafty.common.vertx.VertxContext
-import world.crafty.common.vertx.vx
+import world.crafty.common.vertx.CurrentVertx
 import world.crafty.common.vertx.vxm
-import java.time.Instant
+import world.crafty.proto.client.ChatFromClientCraftyPacket
+import world.crafty.proto.server.ChatMessageCraftyPacket
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
 import javax.crypto.Cipher
@@ -41,6 +38,8 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     private object Common {
         val sessionIds = AtomicLong()
     }
+    
+    private var craftyPlayerId = 0
 
     val verifyToken = generateVerifyToken()
     var encrypted = false
@@ -54,6 +53,11 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
 
     init {
         sessionId = Common.sessionIds.incrementAndGet().toString()
+        /*
+        server.vertx.setPeriodic(50) {
+            println("timer!")
+        }
+        */
     }
 
     fun receive(buffer: Buffer) {
@@ -79,7 +83,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     }
 
     val uncompressedHandler = LengthPrefixedHandler {
-        launch(VertxContext) {
+        launch(CurrentVertx) {
             val stream = ByteArrayInputStream(it.bytes)
             val reader = MinecraftInputStream(stream)
 
@@ -174,12 +178,19 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 println("mojang replied to $username auth")
                 
                 val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false), it) }
-
+                
                 if(!craftyResponse.accepted)
                     throw IllegalStateException("Crafty refused us from joining") // TODO: handle failure
                 
+                craftyPlayerId = craftyResponse.playerId
+                
                 send(LoginSuccessPcPacket(profile.uuid, profile.name))
                 state = PLAY
+
+                eb.consumer<ChatMessageCraftyPacket>("p:$craftyPlayerId:chat") {
+                    val text = it.body().text
+                    send(ServerChatMessagePcPacket(McChat(text), ChatPosition.CHAT_BOX))
+                }
                 
                 send(JoinGamePcPacket(3, 1, 0, 0, 20, "flat", false))
                 send(ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
@@ -275,10 +286,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 }
             }
             is ClientChatMessagePcPacket -> {
-                val chat = ServerChatMessagePcPacket(McChat("<$username> ${packet.message}"), ChatPosition.CHAT_BOX)
-                server.sessions.values
-                        .filter { it.state == PLAY }
-                        .forEach { it.send(chat) }
+                eb.send("$worldServer:chat", ChatFromClientCraftyPacket(craftyPlayerId, packet.text))
             }
             is PlayerPositionPcPacket -> {
                 server.sessions.values.forEach {

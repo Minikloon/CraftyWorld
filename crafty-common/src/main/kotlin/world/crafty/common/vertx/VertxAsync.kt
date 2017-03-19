@@ -1,17 +1,36 @@
 package world.crafty.common.vertx
 
 import io.vertx.core.AsyncResult
+import io.vertx.core.Context
 import io.vertx.core.Handler
+import io.vertx.core.Vertx
 import io.vertx.core.eventbus.Message
 import io.vertx.core.impl.VertxImpl
+import kotlinx.coroutines.experimental.CancellableContinuation
 import kotlinx.coroutines.experimental.CoroutineDispatcher
-import kotlin.coroutines.experimental.CoroutineContext
-import kotlin.coroutines.experimental.suspendCoroutine
+import kotlinx.coroutines.experimental.Delay
+import kotlinx.coroutines.experimental.DisposableHandle
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.experimental.*
 
-object VertxContext : CoroutineDispatcher() {
-    override fun dispatch(context: CoroutineContext, block: Runnable) {
-        val vertxContext = VertxImpl.context() ?: throw IllegalStateException("Can't use VertxContext if not in a vertx-supplied thread")
-        vertxContext.runOnContext { block.run() }
+class VertxContinuation<in T>(val vertxContext: Context, val cont: Continuation<T>) : Continuation<T> by cont {
+    override fun resume(value: T) {
+        vertxContext.runOnContext { cont.resume(value) }
+    }
+
+    override fun resumeWithException(exception: Throwable) {
+        vertxContext.runOnContext { cont.resumeWithException(exception) }
+    }
+}
+
+object CurrentVertx : AbstractCoroutineContextElement(ContinuationInterceptor), ContinuationInterceptor, Delay {
+    val vertxContext: Context
+        get() = VertxImpl.context() ?: throw IllegalStateException("Can't use CurrentVertx if not in a vertx-supplied thread")
+    
+    override fun <T> interceptContinuation(continuation: Continuation<T>) = VertxContinuation(vertxContext, continuation)
+
+    override fun scheduleResumeAfterDelay(time: Long, unit: TimeUnit, continuation: CancellableContinuation<Unit>) {
+        vertxContext.owner().setTimer(unit.toMillis(time)) { continuation.resume(Unit) }   
     }
 }
 

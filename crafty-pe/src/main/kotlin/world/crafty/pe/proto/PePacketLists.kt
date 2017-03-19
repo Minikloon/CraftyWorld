@@ -2,10 +2,7 @@ package world.crafty.pe.proto
 
 import world.crafty.pe.proto.packets.client.ConnectedPingPePacket
 import world.crafty.pe.proto.packets.client.*
-import world.crafty.pe.proto.packets.mixed.CompressionWrapperPePacket
-import world.crafty.pe.proto.packets.mixed.EncryptionWrapperPePacket
-import world.crafty.pe.proto.packets.mixed.PlayerActionPePacket
-import world.crafty.pe.proto.packets.mixed.SetPlayerPositionPePacket
+import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
 import world.crafty.pe.raknet.packets.*
 
@@ -38,7 +35,8 @@ object ServerBoundPeWrappedPackets : InboundPePacketList() {
                 ResourcePackClientResponsePePacket.Codec,
                 ChunkRadiusRequestPePacket.Codec,
                 PlayerActionPePacket.Codec,
-                SetPlayerPositionPePacket.Codec
+                SetPlayerPositionPePacket.Codec,
+                ChatPePacket.Codec
         )
     }
 }

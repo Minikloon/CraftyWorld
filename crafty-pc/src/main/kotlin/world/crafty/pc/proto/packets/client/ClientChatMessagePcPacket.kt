@@ -5,7 +5,7 @@ import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.proto.PcPacket
 
 class ClientChatMessagePcPacket(
-        val message: String
+        val text: String
 ) : PcPacket() {
     override val id = Codec.id
     override val codec = Codec
@@ -13,11 +13,11 @@ class ClientChatMessagePcPacket(
         override val id = 0x02
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientChatMessagePcPacket) throw IllegalArgumentException()
-            stream.writeString(obj.message)
+            stream.writeString(obj.text)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return ClientChatMessagePcPacket(
-                    message = stream.readString()
+                    text = stream.readString()
             )
         }
     }

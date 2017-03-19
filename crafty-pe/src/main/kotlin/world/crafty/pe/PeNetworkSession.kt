@@ -12,7 +12,7 @@ import org.joml.Vector2f
 import org.joml.Vector3f
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
-import world.crafty.common.vertx.VertxContext
+import world.crafty.common.vertx.CurrentVertx
 import world.crafty.common.vertx.vxm
 import world.crafty.pe.proto.PePacket
 import world.crafty.pe.proto.ServerBoundPeTopLevelPackets
@@ -22,7 +22,9 @@ import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
 import world.crafty.pe.raknet.*
 import world.crafty.pe.raknet.session.RakNetworkSession
+import world.crafty.proto.client.ChatFromClientCraftyPacket
 import world.crafty.proto.client.JoinRequestCraftyPacket
+import world.crafty.proto.server.ChatMessageCraftyPacket
 import world.crafty.proto.server.JoinResponseCraftyPacket
 import java.io.ByteArrayOutputStream
 import java.security.KeyFactory
@@ -41,6 +43,8 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     private var loggedIn = false
     var loginExtraData: LoginExtraData? = null
         private set
+    
+    private var craftyPlayerId = 0
 
     private var encrypted: Boolean = false
     private lateinit var cipher: Cipher
@@ -78,7 +82,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
             return
         }
         val message = codec.deserialize(payload)
-        launch(VertxContext) {
+        launch(CurrentVertx) {
             handlePeMessage(message)
         }
     }
@@ -167,6 +171,12 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false), it) }
                     if (!craftyResponse.accepted)
                         throw IllegalStateException("CraftyServer denied our join request :(")
+                    craftyPlayerId = craftyResponse.playerId
+
+                    eb.consumer<ChatMessageCraftyPacket>("p:$craftyPlayerId:chat") { // TODO: move this somewhere more sensible
+                        val text = it.body().text
+                        queueSend(ChatPePacket(ChatType.CHAT, "", text))
+                    }
 
                     queueSend(StartGamePePacket(
                             entityId = 2,
@@ -302,6 +312,9 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
             }
             is SetPlayerPositionPePacket -> {
                 
+            }
+            is ChatPePacket -> {
+                eb.send("$worldServer:chat", ChatFromClientCraftyPacket(craftyPlayerId, message.text))
             }
             else -> {
                 println("Unhandled pe message ${message.javaClass.simpleName}")
