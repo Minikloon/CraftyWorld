@@ -4,7 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 
-fun ByteArray.decompress(algo: CompressionAlgorithm, expectedSize: Int = 0) : ByteArray {    
+fun ByteArray.decompressed(algo: CompressionAlgorithm, expectedSize: Int = 0) : ByteArray {    
     val inflater = Inflater()
     inflater.setInput(this)
     
@@ -19,7 +19,7 @@ fun ByteArray.decompress(algo: CompressionAlgorithm, expectedSize: Int = 0) : By
     return bs.toByteArray()
 }
 
-fun ByteArray.compress(algo: CompressionAlgorithm, level: Int = Deflater.DEFAULT_COMPRESSION) : ByteArray {
+fun ByteArray.compressed(algo: CompressionAlgorithm, level: Int = Deflater.DEFAULT_COMPRESSION) : ByteArray {
     val deflater = Deflater()
     deflater.setInput(this)
     deflater.setLevel(level)

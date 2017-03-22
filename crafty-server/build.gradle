@@ -3,4 +3,5 @@ version '1.0-SNAPSHOT'
 
 dependencies {
     compile project(":crafty-proto")
+    compile project(":crafty-nbt")
 }

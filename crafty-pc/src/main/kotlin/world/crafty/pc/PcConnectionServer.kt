@@ -6,13 +6,10 @@ import io.vertx.core.net.NetSocket
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.proto.packets.server.ServerKeepAlivePcPacket
 import world.crafty.pc.mojang.MojangClient
-import world.crafty.pc.world.World
 import java.io.ByteArrayOutputStream
-import java.time.Duration
-import java.time.Instant
 import javax.crypto.Cipher
 
-class PcConnectionServer(val port: Int, val world: World, val worldServer: String) : AbstractVerticle() {
+class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var server: NetServer
     val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
 
@@ -29,7 +26,7 @@ class PcConnectionServer(val port: Int, val world: World, val worldServer: Strin
 
         val brandStream = ByteArrayOutputStream()
         val mcStream = MinecraftOutputStream(brandStream)
-        mcStream.writeString("snowfite")
+        mcStream.writeSignedString("crafty")
         encodedBrand = brandStream.toByteArray()
     }
 

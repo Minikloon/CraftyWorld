@@ -13,11 +13,11 @@ class ClientKeepAlivePcPacket(
         override val id = 0x0B
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientKeepAlivePcPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.confirmId)
+            stream.writeSignedVarInt(obj.confirmId)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return ClientKeepAlivePcPacket(
-                    confirmId = stream.readUnsignedVarInt()
+                    confirmId = stream.readSignedVarInt()
             )
         }
     }

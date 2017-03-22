@@ -13,11 +13,11 @@ class ChunkRadiusRequestPePacket(
         override val id = 0x44
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ChunkRadiusRequestPePacket) throw IllegalArgumentException()
-            stream.writeSignedVarInt(id)
+            stream.writeZigzagVarInt(id)
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
             return ChunkRadiusRequestPePacket(
-                    desiredChunkRadius = stream.readSignedVarInt()
+                    desiredChunkRadius = stream.readZigzagVarInt()
             )
         }
     }

@@ -16,10 +16,10 @@ class StatusResponsePcPacket(
         override val id = 0x00
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is StatusResponsePcPacket) throw IllegalArgumentException()
-            stream.writeString(Json.encode(obj))
+            stream.writeSignedString(Json.encode(obj))
         }
         override fun deserialize(stream: MinecraftInputStream) : PcPacket {
-            val fromJson = Json.decodeValue(stream.readString(), StatusResponsePcPacket::class.java)
+            val fromJson = Json.decodeValue(stream.readSignedString(), StatusResponsePcPacket::class.java)
             return StatusResponsePcPacket(
                     version = fromJson.version,
                     players = fromJson.players,

@@ -15,17 +15,17 @@ class EncryptionRequestPcPacket(
         override val id = 0x01
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is EncryptionRequestPcPacket) throw IllegalArgumentException()
-            stream.writeString(obj.serverId)
-            stream.writeUnsignedVarInt(obj.publicKey.size)
+            stream.writeSignedString(obj.serverId)
+            stream.writeSignedVarInt(obj.publicKey.size)
             stream.write(obj.publicKey)
-            stream.writeUnsignedVarInt(obj.verifyToken.size)
+            stream.writeSignedVarInt(obj.verifyToken.size)
             stream.write(obj.verifyToken)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
-            val serverId = stream.readString()
-            val publicKey = ByteArray(stream.readUnsignedVarInt())
+            val serverId = stream.readSignedString()
+            val publicKey = ByteArray(stream.readSignedVarInt())
             stream.readFully(publicKey)
-            val verifyToken = ByteArray(stream.readUnsignedVarInt())
+            val verifyToken = ByteArray(stream.readSignedVarInt())
             stream.readFully(verifyToken)
             return EncryptionRequestPcPacket(
                     serverId = serverId,

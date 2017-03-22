@@ -18,4 +18,6 @@ class NibbleArray(val backing: ByteArray) {
             backing[halfIndex] = ((previous and 0x0f) or (nibble shl 4)).toByte()
         }
     }
+    
+    val size = backing.size * 2
 }

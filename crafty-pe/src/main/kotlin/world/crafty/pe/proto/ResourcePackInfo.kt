@@ -9,12 +9,12 @@ class ResourcePackInfo(
 ) {
     object Codec : PeCodec<ResourcePackInfo> {
         override fun serialize(obj: ResourcePackInfo, stream: MinecraftOutputStream) {
-            stream.writeString(obj.id)
+            stream.writeUnsignedString(obj.id)
             ResourcePackVersion.Codec.serialize(obj.version, stream)
         }
         override fun deserialize(stream: MinecraftInputStream): ResourcePackInfo {
             return ResourcePackInfo(
-                    id = stream.readString(),
+                    id = stream.readUnsignedString(),
                     version = ResourcePackVersion.Codec.deserialize(stream)
             )
         }
@@ -26,12 +26,12 @@ class ResourcePackVersion(
 ) {
     object Codec : PeCodec<ResourcePackVersion> {
         override fun serialize(obj: ResourcePackVersion, stream: MinecraftOutputStream) {
-            stream.writeString(obj.version)
+            stream.writeUnsignedString(obj.version)
             stream.writeLong(obj.unknown)
         }
         override fun deserialize(stream: MinecraftInputStream): ResourcePackVersion {
             return ResourcePackVersion(
-                    version = stream.readString(),
+                    version = stream.readUnsignedString(),
                     unknown = stream.readLong()
             )
         }

@@ -4,8 +4,8 @@ import io.vertx.core.json.JsonObject
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.utils.CompressionAlgorithm
-import world.crafty.common.utils.compress
-import world.crafty.common.utils.decompress
+import world.crafty.common.utils.compressed
+import world.crafty.common.utils.decompressed
 import world.crafty.pe.jwt.PeJwt
 import world.crafty.pe.proto.PePacket
 
@@ -24,7 +24,7 @@ class LoginPePacket(
             stream.writeInt(obj.protocolVersion)
             stream.writeByte(obj.edition)
             val payload = obj.certChain.toString().toByteArray() + obj.skinJwt.toString().toByteArray()
-            stream.write(payload.compress(CompressionAlgorithm.ZLIB))
+            stream.write(payload.compressed(CompressionAlgorithm.ZLIB))
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
             val protocolVersion = stream.readInt()
@@ -33,14 +33,14 @@ class LoginPePacket(
             val payloadSize = stream.readUnsignedVarInt()
             val zlibedPayload = stream.readRemainingBytes()
 
-            val payload = zlibedPayload.decompress(CompressionAlgorithm.ZLIB, payloadSize)
+            val payload = zlibedPayload.decompressed(CompressionAlgorithm.ZLIB, payloadSize)
             val pStream = MinecraftInputStream(payload)
 
-            val chainStr = pStream.readString(pStream.readIntLe())
+            val chainStr = pStream.readUnsignedString(pStream.readIntLe())
             val chainJson = JsonObject(chainStr)
             val certChain = chainJson.getJsonArray("chain").map { PeJwt.parse(it as String) }
 
-            val skinJwt = pStream.readString(pStream.readIntLe())
+            val skinJwt = pStream.readUnsignedString(pStream.readIntLe())
 
             return LoginPePacket(
                     protocolVersion = protocolVersion,

@@ -14,11 +14,11 @@ class ClientStatusPcPacket(
         override val id = 0x03
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientStatusPcPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.action.ordinal)
+            stream.writeSignedVarInt(obj.action.ordinal)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return ClientStatusPcPacket(
-                    action = ClientStatus.values()[stream.readUnsignedVarInt()]
+                    action = ClientStatus.values()[stream.readSignedVarInt()]
             )
         }
     }

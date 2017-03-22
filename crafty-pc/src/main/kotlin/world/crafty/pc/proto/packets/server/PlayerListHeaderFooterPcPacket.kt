@@ -21,8 +21,8 @@ class PlayerListHeaderFooterPcPacket(
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return PlayerListHeaderFooterPcPacket(
-                    header = Json.decodeValue(stream.readString(), McChat::class.java),
-                    footer = Json.decodeValue(stream.readString(), McChat::class.java)
+                    header = Json.decodeValue(stream.readSignedString(), McChat::class.java),
+                    footer = Json.decodeValue(stream.readSignedString(), McChat::class.java)
             )
         }
     }

@@ -3,8 +3,8 @@ package world.crafty.pe.proto.packets.mixed
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.utils.CompressionAlgorithm
-import world.crafty.common.utils.compress
-import world.crafty.common.utils.decompress
+import world.crafty.common.utils.compressed
+import world.crafty.common.utils.decompressed
 import world.crafty.common.utils.toHexStr
 import world.crafty.pe.proto.PePacket
 import world.crafty.pe.proto.ServerBoundPeWrappedPackets
@@ -41,7 +41,7 @@ class CompressionWrapperPePacket(
                 mcStream.writeByte(it.id)
                 mcStream.write(serialized)
             }
-            val compressed = bs.toByteArray().compress(CompressionAlgorithm.ZLIB, level)
+            val compressed = bs.toByteArray().compressed(CompressionAlgorithm.ZLIB, level)
             stream.writeUnsignedVarInt(compressed.size)
             stream.write(compressed)
         }
@@ -50,7 +50,7 @@ class CompressionWrapperPePacket(
             if(compressedSize > 500_000) throw IllegalStateException("client tried to create a huge CompressionWrapper of $compressedSize bytes")
             val compressed = stream.readByteArray(compressedSize)
 
-            val decompressed = compressed.decompress(CompressionAlgorithm.ZLIB)
+            val decompressed = compressed.decompressed(CompressionAlgorithm.ZLIB)
 
             val codecMap = ServerBoundPeWrappedPackets.idToCodec
 

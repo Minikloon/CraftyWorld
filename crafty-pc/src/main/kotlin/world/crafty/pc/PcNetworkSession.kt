@@ -2,7 +2,6 @@ package world.crafty.pc
 
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.net.NetSocket
-import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.joml.Vector3i
 import world.crafty.common.serialization.MinecraftInputStream
@@ -12,7 +11,10 @@ import world.crafty.common.utils.Clock
 import world.crafty.pc.proto.*
 import world.crafty.pc.proto.packets.client.*
 import world.crafty.pc.proto.packets.server.*
-import world.crafty.pc.world.Location
+import world.crafty.common.Location
+import world.crafty.common.utils.CompressionAlgorithm
+import world.crafty.common.utils.compressed
+import world.crafty.common.utils.decompressed
 import world.crafty.pc.metadata.PlayerMetadata
 import world.crafty.proto.client.JoinRequestCraftyPacket
 import world.crafty.proto.server.JoinResponseCraftyPacket
@@ -20,8 +22,13 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import world.crafty.common.vertx.CurrentVertx
 import world.crafty.common.vertx.vxm
+import world.crafty.pc.world.PcChunkColumn
+import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.client.ChatFromClientCraftyPacket
+import world.crafty.proto.client.ChunksRadiusRequestCraftyPacket
 import world.crafty.proto.server.ChatMessageCraftyPacket
+import world.crafty.proto.server.ChunksRadiusResponseCraftyPacket
+import world.crafty.proto.server.PreSpawnCraftyPacket
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
 import javax.crypto.Cipher
@@ -40,6 +47,8 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     }
     
     private var craftyPlayerId = 0
+    
+    private var spawnPosition: Location? = null
 
     val verifyToken = generateVerifyToken()
     var encrypted = false
@@ -50,64 +59,72 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     private lateinit var brand : String
     
     private val eb = server.vertx.eventBus()
+    
+    private val compressionThreshold = 256
+    private var compressing = false
 
     init {
         sessionId = Common.sessionIds.incrementAndGet().toString()
-        /*
-        server.vertx.setPeriodic(50) {
-            println("timer!")
-        }
-        */
+    }
+
+    fun send(content: LengthPrefixedContent) {
+        val bs = ByteArrayOutputStream()
+        val stream = if(encrypted) MinecraftOutputStream(CipherOutputStream(bs, cipher)) else MinecraftOutputStream(bs)
+        content.serializeWithLengthPrefix(stream, compressing, compressionThreshold)
+        socket.write(Buffer.buffer(bs.toByteArray()))
     }
 
     fun receive(buffer: Buffer) {
         var bytes = buffer.bytes
         if(encrypted)
             bytes = decipher.update(bytes)
-        uncompressedHandler.handle(Buffer.buffer(bytes))
-    }
-
-    fun send(packet: PcPacket) {
-        val packetStream = ByteArrayOutputStream()
-        if(encrypted) {
-            val cipherStream = CipherOutputStream(packetStream, cipher)
-            val mcPacketStream = MinecraftOutputStream(cipherStream)
-            packet.serializeWithHeader(mcPacketStream)
-        } else {
-            val mcPacketStream = MinecraftOutputStream(packetStream)
-            packet.serializeWithHeader(mcPacketStream)
-        }
-
-        val bytes = packetStream.toByteArray()
-        socket.write(Buffer.buffer(bytes))
+        if(compressing)
+            compressedHandler.handle(Buffer.buffer(bytes))
+        else
+            uncompressedHandler.handle(Buffer.buffer(bytes))
     }
 
     val uncompressedHandler = LengthPrefixedHandler {
         launch(CurrentVertx) {
-            val stream = ByteArrayInputStream(it.bytes)
-            val reader = MinecraftInputStream(stream)
-
-            val packetId = reader.readUnsignedVarInt()
-
-            val codec = state.pcPacketList.idToCodec[packetId]
-            if(codec == null) {
-                println("Unknown packet id $packetId while in state $state")
+            val bs = ByteArrayInputStream(it.bytes)
+            val stream = MinecraftInputStream(bs)
+            handlePayload(stream)
+        }
+    }
+    
+    val compressedHandler = LengthPrefixedHandler {
+        launch(CurrentVertx) {
+            val bs = ByteArrayInputStream(it.bytes)
+            val stream = MinecraftInputStream(bs)
+            val decompressedLength = stream.readSignedVarInt()
+            if(decompressedLength < compressionThreshold) {
+                handlePayload(stream)
                 return@launch
             }
-
-            val packet = codec.deserialize(stream)
-            if(packet !is ClientKeepAlivePcPacket && packet !is PlayerPositionPcPacket && packet !is PlayerPosAndLookPcPacket && packet !is PlayerLookPcPacket)
-                println("received ${packet.javaClass.simpleName}")
-
-            when (state) {
-                HANDSHAKE -> handleHandshakePacket(packet)
-                STATUS -> handleStatusPacket(packet)
-                LOGIN -> handleLoginPacket(packet)
-                PLAY -> handlePlayPacket(packet)
-            }
-
-            lastUpdate.reset()
+            val decompressed = stream.readRemainingBytes().decompressed(CompressionAlgorithm.ZLIB, decompressedLength)
+            handlePayload(MinecraftInputStream(decompressed))
         }
+    }
+    
+    suspend private fun handlePayload(stream: MinecraftInputStream) {
+        val packetId = stream.readSignedVarInt()
+
+        val codec = state.pcPacketList.idToCodec[packetId]
+        if(codec == null) {
+            println("Unknown packet id $packetId while in state $state")
+            return
+        }
+        val packet = codec.deserialize(stream)
+        if(packet !is ClientKeepAlivePcPacket && packet !is PlayerPositionPcPacket && packet !is PlayerPosAndLookPcPacket && packet !is PlayerLookPcPacket)
+            println("received ${packet.javaClass.simpleName}")
+
+        when (state) {
+            HANDSHAKE -> handleHandshakePacket(packet)
+            STATUS -> handleStatusPacket(packet)
+            LOGIN -> handleLoginPacket(packet)
+            PLAY -> handlePlayPacket(packet)
+        }
+        lastUpdate.reset()
     }
 
     private fun handleHandshakePacket(packet: PcPacket) {
@@ -172,39 +189,54 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 encrypted = true
                 println("Now encrypting with ${socket.remoteAddress()}")
 
+                send(SetCompressionPcPacket(compressionThreshold))
+                compressing = true
+
                 val serverId = server.mojang.getServerIdHash(sessionId, sharedSecret, server.x509PubKey)
                 val profile = server.mojang.checkHasJoinedAsync(username, serverId)
                 
                 println("mojang replied to $username auth")
                 
-                val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false), it) }
+                val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false, MinecraftPlatform.PC), it) }
                 
                 if(!craftyResponse.accepted)
                     throw IllegalStateException("Crafty refused us from joining") // TODO: handle failure
                 
-                craftyPlayerId = craftyResponse.playerId
+                craftyPlayerId = craftyResponse.playerId!!
                 
                 send(LoginSuccessPcPacket(profile.uuid, profile.name))
                 state = PLAY
 
-                eb.consumer<ChatMessageCraftyPacket>("p:$craftyPlayerId:chat") {
+                eb.consumer<ChatMessageCraftyPacket>("p:c:$craftyPlayerId:chat") {
                     val text = it.body().text
                     send(ServerChatMessagePcPacket(McChat(text), ChatPosition.CHAT_BOX))
                 }
-                
-                send(JoinGamePcPacket(3, 1, 0, 0, 20, "flat", false))
+
+                val prespawn = craftyResponse.prespawn!!
+                spawnPosition = prespawn.spawnLocation
+                send(JoinGamePcPacket(
+                        eid = prespawn.entityId,
+                        gamemode = prespawn.gamemode,
+                        dimension = prespawn.dimension,
+                        difficulty = 0,
+                        maxPlayers = 0,
+                        levelType = "flat",
+                        reducedDebug = false
+                ))
                 send(ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
 
-                val world = server.world
-                val spawnPos = world.spawn
 
-                loc = spawnPos
+                eb.send<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId:chunkRadiusReq", ChunksRadiusRequestCraftyPacket(prespawn.spawnLocation.positionVec3(), 0, 8)) {
+                    val response = it.result().body()
+                    response.chunkColumns.forEach { setColumn ->
+                        if (setColumn.platform != MinecraftPlatform.PC) throw IllegalStateException("Received a non-pc chunk on pc connserver")
+                        send(PrecompressedPayload(setColumn.decompressedSize, setColumn.zlibCompressedFullChunkPacket))
+                    }
+                }
 
+                val spawnPos = prespawn.spawnLocation
                 send(SetSpawnPositionPcPacket(Vector3i(spawnPos.x.toInt(), spawnPos.y.toInt(), spawnPos.z.toInt())))
-
-                val toSend = world.chunks.filter { (it.x - spawnPos.x/16) * (it.x - spawnPos.x/16) + (it.z - spawnPos.z/16) * (it.z - spawnPos.z/16) < 8*8 }
-                toSend.map { it.toPacket() }.forEach { send(it) }
-
+                
                 send(ServerChatMessagePcPacket(McChat("Welcome!"), ChatPosition.CHAT_BOX))
                 send(PlayerListHeaderFooterPcPacket(McChat("Header"), McChat("Footer")))
 
@@ -226,6 +258,9 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                         skinParts = 0b1111111
                 )
 
+                send(TeleportPlayerPcPacket(PcLocation(spawnPos), 0, 1))
+                
+                /*
                 server.sessions.values.forEach {
                     it.send(PlayerListItemPcPacket(0, listOf(
                             PlayerListItemPcPacket.PlayerListItemAdd(
@@ -240,17 +275,12 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                         it.send(SpawnPlayerPcPacket(
                                 4,
                                 profile.uuid,
-                                spawnPos.x,
-                                spawnPos.y,
-                                spawnPos.z,
-                                0,
-                                0,
+                                PcLocation(spawnPos),
                                 playerMetadata)
                         )
                     }
                 }
-
-                send(TeleportPlayerPcPacket(spawnPos, 0, 1))
+                */
             }
             else -> {
                 println("Unhandled Login packet ${packet.javaClass.simpleName}")
@@ -278,7 +308,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 val dataStream = MinecraftInputStream(packet.data)
                 when(channel) {
                     "MC|Brand" -> {
-                        brand = dataStream.readString()
+                        brand = dataStream.readSignedString()
                     }
                     else -> {
                         println("Unhandled packet on channel $channel with ${packet.data.size} bytes")
@@ -286,7 +316,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 }
             }
             is ClientChatMessagePcPacket -> {
-                eb.send("$worldServer:chat", ChatFromClientCraftyPacket(craftyPlayerId, packet.text))
+                eb.send("p:s:$craftyPlayerId:chat", ChatFromClientCraftyPacket(packet.text))
             }
             is PlayerPositionPcPacket -> {
                 server.sessions.values.forEach {

@@ -30,6 +30,14 @@ class RakMessage(val headerFlags: RakMessageFlags, val reliability: MetaReliabil
     fun serialize(stream: MinecraftOutputStream) {
         Codec.serialize(this, stream)
     }
+    
+    val overheadPerSplit : Int
+        get() {
+            val reliabilityOverhead = if(reliability == null) 0 else MetaReliability.size
+            val orderOverhead = if(order == null) 0 else MetaOrder.size
+            val splitOverhead = MetaSplits.size
+            return reliabilityOverhead + orderOverhead + splitOverhead
+        }
 
     object Codec : PeCodec<RakMessage> {
         override fun serialize(obj: RakMessage, stream: MinecraftOutputStream) {

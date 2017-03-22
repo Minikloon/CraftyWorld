@@ -4,6 +4,7 @@ public final class LongPackedArray {
     private final long[] words;
     private final byte bitsPerValue;
     private final long valueMask;
+    private final int size;
 
     public static final byte bitsPerWord = Long.SIZE;
 
@@ -15,6 +16,7 @@ public final class LongPackedArray {
         this.words = new long[longs];
         this.bitsPerValue = (byte) bitsPerValue;
         this.valueMask = (1L << bitsPerValue) - 1L;
+        this.size = capacity;
     }
 
     public long[] getBacking() {
@@ -51,6 +53,11 @@ public final class LongPackedArray {
             wordIndex++;
             words[wordIndex] = words[wordIndex] & ~((1L << i2 - bitsPerWord) - 1L) | value >> bitsPerWord - shifts;
         }
+    }
+    
+    // returns size in bits ignoring extra capacity from misalignment
+    public int getSize() {
+        return size;
     }
 }
 

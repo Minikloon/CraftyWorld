@@ -22,7 +22,7 @@ class ServerChatMessagePcPacket(
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return ServerChatMessagePcPacket(
-                    chat = Json.decodeValue(stream.readString(), McChat::class.java),
+                    chat = Json.decodeValue(stream.readSignedString(), McChat::class.java),
                     position = ChatPosition.values()[stream.readByte().toInt()]
             )
         }

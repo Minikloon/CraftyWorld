@@ -2,18 +2,16 @@ package world.crafty.pc.proto.packets.server
 
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
+import world.crafty.pc.PcLocation
 import world.crafty.pc.metadata.PlayerMetadata
 import world.crafty.pc.proto.PcPacket
+import world.crafty.pc.writePcLocation
 import java.util.*
 
 class SpawnPlayerPcPacket(
         val entityId : Int,
         val playerUuid : UUID,
-        val x: Double,
-        val y: Double,
-        val z: Double,
-        val yaw: Byte,
-        val pitch: Byte,
+        val location: PcLocation,
         val metadata: PlayerMetadata
 ) : PcPacket() {
     override val id = Codec.id
@@ -22,13 +20,9 @@ class SpawnPlayerPcPacket(
         override val id = 0x05
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SpawnPlayerPcPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.entityId)
+            stream.writeSignedVarInt(obj.entityId)
             stream.writeUuid(obj.playerUuid)
-            stream.writeDouble(obj.x)
-            stream.writeDouble(obj.y)
-            stream.writeDouble(obj.z)
-            stream.writeByte(obj.yaw)
-            stream.writeByte(obj.pitch)
+            stream.writePcLocation(obj.location)
             obj.metadata.writeToStream(stream)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {

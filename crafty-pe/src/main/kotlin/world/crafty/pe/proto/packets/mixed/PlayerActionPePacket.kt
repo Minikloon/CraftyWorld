@@ -38,20 +38,20 @@ class PlayerActionPePacket(
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PlayerActionPePacket) throw IllegalArgumentException()
             stream.writeUnsignedVarLong(obj.entityId)
-            stream.writeSignedVarInt(obj.action.ordinal)
-            stream.writeSignedVarInt(obj.x)
+            stream.writeZigzagVarInt(obj.action.ordinal)
+            stream.writeZigzagVarInt(obj.x)
             stream.writeUnsignedVarInt(obj.y)
-            stream.writeSignedVarInt(obj.z)
-            stream.writeSignedVarInt(obj.blockFace)
+            stream.writeZigzagVarInt(obj.z)
+            stream.writeZigzagVarInt(obj.blockFace)
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
             return PlayerActionPePacket(
                     entityId = stream.readUnsignedVarLong(),
-                    action = PlayerAction.values()[stream.readSignedVarInt()],
-                    x = stream.readSignedVarInt(),
+                    action = PlayerAction.values()[stream.readZigzagVarInt()],
+                    x = stream.readZigzagVarInt(),
                     y = stream.readUnsignedVarInt(),
-                    z = stream.readSignedVarInt(),
-                    blockFace = stream.readSignedVarInt()
+                    z = stream.readZigzagVarInt(),
+                    blockFace = stream.readZigzagVarInt()
             )
         }
     }

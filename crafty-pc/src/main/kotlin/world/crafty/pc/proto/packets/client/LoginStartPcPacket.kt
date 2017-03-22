@@ -13,11 +13,11 @@ class LoginStartPcPacket(
         override val id = 0x00
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is LoginStartPcPacket) throw IllegalArgumentException()
-            stream.writeString(obj.username)
+            stream.writeSignedString(obj.username)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return LoginStartPcPacket(
-                    username = stream.readString()
+                    username = stream.readSignedString()
             )
         }
     }

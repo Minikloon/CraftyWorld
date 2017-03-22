@@ -10,6 +10,7 @@ import io.vertx.core.net.impl.SocketAddressImpl
 import kotlinx.coroutines.experimental.launch
 import org.joml.Vector2f
 import org.joml.Vector3f
+import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.vertx.CurrentVertx
@@ -22,10 +23,15 @@ import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
 import world.crafty.pe.raknet.*
 import world.crafty.pe.raknet.session.RakNetworkSession
+import world.crafty.proto.GameMode
+import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.client.ChatFromClientCraftyPacket
+import world.crafty.proto.client.ChunksRadiusRequestCraftyPacket
 import world.crafty.proto.client.JoinRequestCraftyPacket
 import world.crafty.proto.server.ChatMessageCraftyPacket
+import world.crafty.proto.server.ChunksRadiusResponseCraftyPacket
 import world.crafty.proto.server.JoinResponseCraftyPacket
+import world.crafty.proto.server.PreSpawnCraftyPacket
 import java.io.ByteArrayOutputStream
 import java.security.KeyFactory
 import java.security.MessageDigest
@@ -53,6 +59,8 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     private val sendCounter = AtomicLong(0)
     
     private val packetSendQueue = mutableListOf<PePacket>()
+    
+    private var location = Location(0f, 0f, 0f)
     
     private lateinit var eb: EventBus
 
@@ -88,7 +96,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     }
     
     private suspend fun handlePeMessage(message: PePacket) {
-        if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerPositionPePacket)
+        if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerPositionPePacket && message !is ConnectedPingPePacket)
             println("${System.currentTimeMillis()} HANDLE ${message::class.java.simpleName}")
         when(message) {
             is ConnectedPingPePacket -> {
@@ -168,28 +176,23 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 println("resource pack response status: ${message.status}")
                 val startGame: suspend () -> Unit = {
                     val username = loginExtraData?.displayName ?: throw IllegalStateException("ResourcePackClientResponse without prior login!")
-                    val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false), it) }
+                    val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false, MinecraftPlatform.PE), it) }
                     if (!craftyResponse.accepted)
                         throw IllegalStateException("CraftyServer denied our join request :(")
-                    craftyPlayerId = craftyResponse.playerId
 
-                    eb.consumer<ChatMessageCraftyPacket>("p:$craftyPlayerId:chat") { // TODO: move this somewhere more sensible
-                        val text = it.body().text
-                        queueSend(ChatPePacket(ChatType.CHAT, "", text))
-                    }
-
+                    val prespawn = craftyResponse.prespawn!!
+                    location = prespawn.spawnLocation
                     queueSend(StartGamePePacket(
-                            entityId = 2,
+                            entityId = prespawn.entityId.toLong(),
                             runtimeEntityId = 0,
-                            spawn = Vector3f(0f, 18f, 0f),
-                            yawAndPitch = Vector2f(0f, 0f),
+                            spawn = PeLocation(prespawn.spawnLocation),
                             seed = 12345,
                             dimension = 0,
                             generator = 1,
-                            gamemode = GameMode.SURVIVAL,
+                            gamemode = prespawn.gamemode,
                             difficulty = 0,
                             x = 0,
-                            y = 18,
+                            y = 50,
                             z = 0,
                             achievementsDisabled = true,
                             dayCycleStopTime = 6000,
@@ -201,6 +204,14 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                             levelId = "1m0AAMIFIgA=",
                             worldName = "test"
                     ))
+                    
+                    craftyPlayerId = craftyResponse.playerId!!
+
+                    eb.consumer<ChatMessageCraftyPacket>("p:c:$craftyPlayerId:chat") { // TODO: move this somewhere more sensible
+                        val text = it.body().text
+                        queueSend(ChatPePacket(ChatType.CHAT, "", text))
+                    }
+                    
                     queueSend(SetChunkRadiusPePacket(5))
                     queueSend(SetAttributesPePacket(0, PlayerAttribute.defaults))
                     /*
@@ -234,87 +245,27 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
             }
             is ChunkRadiusRequestPePacket -> {
                 println("Requested chunk radius: ${message.desiredChunkRadius}")
-                val chunkRadius = 5
+                val chunkRadius = message.desiredChunkRadius
                 queueSend(SetChunkRadiusPePacket(chunkRadius))
-                val squareRange = (-chunkRadius..chunkRadius)
-                var sent = 0
-                squareRange.forEach { chunkX ->
-                    squareRange.forEach { chunkZ ->
-                        val bs = ByteArrayOutputStream(1024)
-                        val mcStream = MinecraftOutputStream(bs)
-                        val chunksPerColumn = 1
-                        mcStream.writeByte(chunksPerColumn)
-                        (0 until chunksPerColumn).forEach { chunkLayer ->
-                            val blocksPerChunk = 16*16*16
-                            val blocks = ByteArray(blocksPerChunk) { 0x00 }
-                            if(chunkLayer == 0) {
-                                (0 until 16).forEach { bx ->
-                                    (0 until 16).forEach { bz ->
-                                        (0 until 4).forEach { by ->
-                                            val idx = (bx * 256) + (bz * 16) + (by)
-                                            val type = when (by) {
-                                                0 -> 7
-                                                1 -> 3
-                                                2 -> 3
-                                                3 -> 2
-                                                else -> 0
-                                            }
-                                            blocks[idx] = type.toByte()
-                                        }
-                                    }
-                                }
-                            }
-                            val data = ByteArray(blocksPerChunk / 2) { 0x00 }
-                            val blockLight = ByteArray(blocksPerChunk / 2) { 0x00.toByte() }
-                            val skyLight = if(chunkLayer == 0) {
-                                ByteArray(blocksPerChunk / 2) {
-                                    val mod16 = it % 16
-                                    if(mod16 == 0 || mod16 == 1 || mod16 == 8 || mod16 == 9) {
-                                        0
-                                    } else {
-                                        0xFF.toByte()
-                                    }
-                                }
-                            }
-                            else {
-                                ByteArray(blocksPerChunk / 2) { 0x00.toByte() }
-                            }
-                            mcStream.writeByte(0) // chunk mode
-                            mcStream.write(blocks)
-                            mcStream.write(data)
-                            mcStream.write(skyLight)
-                            mcStream.write(blockLight)
-                        }
-                        val height = ByteArray(256*2) { if(it < 256) 4 else 0 }
-                        val biomeIds = ByteArray(16*16) { 0x01 }
-                        mcStream.write(height)
-                        mcStream.write(biomeIds)
-                        mcStream.writeByte(0) // something about border blocks
 
-                        mcStream.writeSignedVarInt(0) // block entities
-
-                        val chunkBytes = bs.toByteArray()
-                        
-                        val chunkPacket = FullChunkDataPePacket(chunkX, chunkZ, chunkBytes)
-                        
-                        val batched = CompressionWrapperPePacket(chunkPacket)
-                        val compressed = batched.serializedWithId(Deflater.BEST_COMPRESSION)
-
-                        send(EncryptionWrapperPePacket(compressed), RELIABLE_ORDERED)
-                        if(sent++ == 56) {
-                            queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
-                        }
+                eb.send<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId:chunkRadiusReq", ChunksRadiusRequestCraftyPacket(location.positionVec3(), 0, chunkRadius)) {
+                    val response = it.result().body()
+                    response.chunkColumns.forEach { setColumn ->
+                        if (setColumn.platform != MinecraftPlatform.PE) throw IllegalStateException("Received a non-pe chunk on pe connserver")
+                        send(EncryptionWrapperPePacket(setColumn.zlibCompressedFullChunkPacket), RELIABLE_ORDERED)
                     }
+                    println("sent pe ${response.chunkColumns.size} chunks")
+                    queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
                 }
             }
             is PlayerActionPePacket -> {
                 println("action ${message.action}")
             }
             is SetPlayerPositionPePacket -> {
-                
+                //println("pos: ${message.x} ${message.y} ${message.z}")
             }
             is ChatPePacket -> {
-                eb.send("$worldServer:chat", ChatFromClientCraftyPacket(craftyPlayerId, message.text))
+                eb.send("p:s:$craftyPlayerId:chat", ChatFromClientCraftyPacket(message.text))
             }
             else -> {
                 println("Unhandled pe message ${message.javaClass.simpleName}")

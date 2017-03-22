@@ -5,7 +5,7 @@ import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.proto.PcPacket
 
 class SetCompressionPcPacket(
-        val maxSize: Int
+        val threshold: Int
 ) : PcPacket() {
     override val id = Codec.id
     override val codec = Codec
@@ -13,11 +13,11 @@ class SetCompressionPcPacket(
         override val id = 0x03
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetCompressionPcPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.maxSize)
+            stream.writeSignedVarInt(obj.threshold)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return SetCompressionPcPacket(
-                    maxSize = stream.readUnsignedVarInt()
+                    threshold = stream.readSignedVarInt()
             )
         }
     }

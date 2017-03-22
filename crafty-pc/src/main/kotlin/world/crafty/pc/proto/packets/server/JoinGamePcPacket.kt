@@ -3,10 +3,11 @@ package world.crafty.pc.proto.packets.server
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.proto.PcPacket
+import world.crafty.proto.GameMode
 
 class JoinGamePcPacket(
         val eid: Int,
-        val gamemode: Int,
+        val gamemode: GameMode,
         val dimension: Int,
         val difficulty: Int,
         val maxPlayers: Int,
@@ -20,21 +21,21 @@ class JoinGamePcPacket(
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is JoinGamePcPacket) throw IllegalArgumentException()
             stream.writeInt(obj.eid)
-            stream.writeByte(obj.gamemode)
+            stream.writeByte(obj.gamemode.ordinal)
             stream.writeInt(obj.dimension)
             stream.writeByte(obj.difficulty)
             stream.writeByte(obj.maxPlayers)
-            stream.writeString(obj.levelType)
+            stream.writeSignedString(obj.levelType)
             stream.writeBoolean(obj.reducedDebug)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return JoinGamePcPacket(
                     eid = stream.readInt(),
-                    gamemode = stream.readUnsignedByte(),
+                    gamemode = GameMode.values()[stream.readUnsignedByte()],
                     dimension = stream.readInt(),
                     difficulty = stream.readUnsignedByte(),
                     maxPlayers = stream.readUnsignedByte(),
-                    levelType = stream.readString(),
+                    levelType = stream.readSignedString(),
                     reducedDebug = stream.readBoolean()
             )
         }

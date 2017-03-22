@@ -7,8 +7,11 @@ import org.joml.Vector2f
 import org.joml.Vector3f
 import org.joml.Vector3i
 import org.joml.Vector3ic
+import world.crafty.common.Angle256
+import world.crafty.common.Location
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
+import java.io.IOException
 import java.io.InputStream
 import java.util.*
 
@@ -30,9 +33,19 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         return value
     }
     
-    fun readSignedVarInt() : Int {
+    fun readZigzagVarInt() : Int {
         val varInt = readUnsignedVarInt()
         return (varInt ushr 1) xor (varInt shl 31)
+    }
+    
+    fun readSignedVarInt() : Int {
+        var value = 0
+        var bytes = 0
+        do {
+            val b = readByte().toInt()
+            value = value or (b and 127 shl bytes++ * 7)
+        } while (b and 128 == 128)
+        return value
     }
     
     fun readUnsignedVarLong() : Long {
@@ -49,9 +62,19 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         return value
     }
     
-    fun readSignedVarLong() : Long {
+    fun readZigzagVarLong() : Long {
         val varLong = readUnsignedVarLong()
         return (varLong shr 1) xor -(varLong and 1)
+    }
+    
+    fun readSignedVarLong() : Long {
+        var value = 0L
+        var bytes = 0
+        do {
+            val b = readByte().toLong()
+            value = value or ((b and 127L) shl (bytes++ * 7))
+        } while (b and 128 == 128L)
+        return value
     }
     
     fun readIntLe() : Int {
@@ -81,7 +104,14 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         return readByteArray(available())
     }
 
-    fun readString(length: Int = -1) : String {
+    fun readSignedString(length: Int = -1) : String {
+        val size = if(length == -1) readSignedVarInt() else length
+        val bytes = ByteArray(size)
+        read(bytes)
+        return String(bytes)
+    }
+
+    fun readUnsignedString(length: Int = -1) : String {
         val size = if(length == -1) readUnsignedVarInt() else length
         val bytes = ByteArray(size)
         read(bytes)
@@ -89,7 +119,7 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
     }
 
     fun <T> readJson(clazz: Class<T>) : T {
-        val json = readString()
+        val json = readSignedString()
         return Json.decodeValue(json, clazz)
     }
 
@@ -122,5 +152,13 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
     
     fun readVector3fLe() : Vector3f {
         return Vector3f(readFloatLe(), readFloatLe(), readFloatLe())
+    }
+    
+    fun readAngle() : Angle256 {
+        return Angle256(readByte())
+    }
+    
+    fun readLocation() : Location {
+        return Location(readFloat(), readFloat(), readFloat(), readAngle(), readAngle())
     }
 }

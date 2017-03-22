@@ -16,17 +16,17 @@ class HandshakePcPacket(
         override val id = 0x00
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is HandshakePcPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.protocolVersion)
-            stream.writeString(obj.serverAddress)
+            stream.writeSignedVarInt(obj.protocolVersion)
+            stream.writeSignedString(obj.serverAddress)
             stream.writeShort(obj.port)
-            stream.writeUnsignedVarInt(obj.nextState)
+            stream.writeSignedVarInt(obj.nextState)
         }
         override fun deserialize(stream: MinecraftInputStream) : PcPacket {
             return HandshakePcPacket(
-                    protocolVersion = stream.readUnsignedVarInt(),
-                    serverAddress = stream.readString(),
+                    protocolVersion = stream.readSignedVarInt(),
+                    serverAddress = stream.readSignedString(),
                     port = stream.readUnsignedShort(),
-                    nextState = stream.readUnsignedVarInt()
+                    nextState = stream.readSignedVarInt()
             )
         }
     }

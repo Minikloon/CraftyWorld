@@ -47,8 +47,8 @@ class PcChunk(val typeAndData: LongPackedArray, val blockLight: NibbleArray, val
 
     fun writeToStream(stream: MinecraftOutputStream) {
         stream.writeByte(bitsPerBlock)
-        stream.writeUnsignedVarInt(0)
-        stream.writeUnsignedVarInt(typeAndData.backing.size)
+        stream.writeSignedVarInt(0)
+        stream.writeSignedVarInt(typeAndData.backing.size)
         typeAndData.backing.forEach { stream.writeLong(it) }
         stream.write(blockLight.backing)
         if(skyLight != null)

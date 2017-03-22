@@ -18,21 +18,21 @@ class ClientSettingsPcPacket(
         override val id = 0x04
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientSettingsPcPacket) throw IllegalArgumentException()
-            stream.writeString(obj.locale)
+            stream.writeSignedString(obj.locale)
             stream.writeByte(obj.viewDistance)
-            stream.writeUnsignedVarInt(obj.chatMode)
+            stream.writeSignedVarInt(obj.chatMode)
             stream.writeBoolean(obj.chatColors)
             stream.writeByte(obj.skinParts)
-            stream.writeUnsignedVarInt(obj.mainHand)
+            stream.writeSignedVarInt(obj.mainHand)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return ClientSettingsPcPacket(
-                    locale = stream.readString(),
+                    locale = stream.readSignedString(),
                     viewDistance = stream.readByte().toInt(),
-                    chatMode = stream.readUnsignedVarInt(),
+                    chatMode = stream.readSignedVarInt(),
                     chatColors = stream.readBoolean(),
                     skinParts = stream.readUnsignedByte(),
-                    mainHand = stream.readUnsignedVarInt()
+                    mainHand = stream.readSignedVarInt()
             )
         }
     }

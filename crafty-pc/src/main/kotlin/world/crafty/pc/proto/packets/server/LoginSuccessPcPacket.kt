@@ -15,13 +15,13 @@ class LoginSuccessPcPacket(
         override val id = 0x02
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is LoginSuccessPcPacket) throw IllegalArgumentException()
-            stream.writeString(obj.uuid.toString())
-            stream.writeString(obj.username)
+            stream.writeSignedString(obj.uuid.toString())
+            stream.writeSignedString(obj.username)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return LoginSuccessPcPacket(
-                    uuid = UUID.fromString(stream.readString()),
-                    username = stream.readString()
+                    uuid = UUID.fromString(stream.readSignedString()),
+                    username = stream.readSignedString()
             )
         }
     }

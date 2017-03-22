@@ -13,11 +13,11 @@ class ClientChatMessagePcPacket(
         override val id = 0x02
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientChatMessagePcPacket) throw IllegalArgumentException()
-            stream.writeString(obj.text)
+            stream.writeSignedString(obj.text)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return ClientChatMessagePcPacket(
-                    text = stream.readString()
+                    text = stream.readSignedString()
             )
         }
     }

@@ -25,15 +25,15 @@ class ChatPePacket(
             if(obj !is ChatPePacket) throw IllegalArgumentException()
             stream.writeByte(obj.type.ordinal)
             if(obj.type.usesSource)
-                stream.writeString(obj.source ?: throw IllegalStateException("ChatPePacket of type ${obj.type} requires a non-null source"))
-            stream.writeString(obj.text)
+                stream.writeUnsignedString(obj.source ?: throw IllegalStateException("ChatPePacket of type ${obj.type} requires a non-null source"))
+            stream.writeUnsignedString(obj.text)
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
             val type = ChatType.values()[stream.readByte().toInt()]
             return ChatPePacket(
                     type = type,
-                    source = if(type.usesSource) stream.readString() else null,
-                    text = stream.readString()
+                    source = if(type.usesSource) stream.readUnsignedString() else null,
+                    text = stream.readUnsignedString()
             )
         }
     }

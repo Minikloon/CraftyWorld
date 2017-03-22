@@ -19,7 +19,7 @@ class TeleportEntityPcPacket(
         override val id = 0x49
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is TeleportEntityPcPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.entityId)
+            stream.writeSignedVarInt(obj.entityId)
             stream.writeDouble(obj.x)
             stream.writeDouble(obj.y)
             stream.writeDouble(obj.z)
@@ -29,7 +29,7 @@ class TeleportEntityPcPacket(
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return TeleportEntityPcPacket(
-                    entityId = stream.readUnsignedVarInt(),
+                    entityId = stream.readSignedVarInt(),
                     x = stream.readDouble(),
                     y = stream.readDouble(),
                     z = stream.readDouble(),

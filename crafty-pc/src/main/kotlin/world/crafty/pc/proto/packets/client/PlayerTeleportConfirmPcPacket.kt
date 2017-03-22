@@ -13,11 +13,11 @@ class PlayerTeleportConfirmPcPacket(
         override val id = 0x00
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PlayerTeleportConfirmPcPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.confirmId)
+            stream.writeSignedVarInt(obj.confirmId)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return PlayerTeleportConfirmPcPacket(
-                    confirmId = stream.readUnsignedVarInt()
+                    confirmId = stream.readSignedVarInt()
             )
         }
     }

@@ -14,15 +14,15 @@ class EncryptionResponsePcPacket(
         override val id = 0x01
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is EncryptionResponsePcPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.sharedSecret.size)
+            stream.writeSignedVarInt(obj.sharedSecret.size)
             stream.write(obj.sharedSecret)
-            stream.writeUnsignedVarInt(obj.verifyToken.size)
+            stream.writeSignedVarInt(obj.verifyToken.size)
             stream.write(obj.verifyToken)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
-            val sharedSecret = ByteArray(stream.readUnsignedVarInt())
+            val sharedSecret = ByteArray(stream.readSignedVarInt())
             stream.readFully(sharedSecret)
-            val verifyToken = ByteArray(stream.readUnsignedVarInt())
+            val verifyToken = ByteArray(stream.readSignedVarInt())
             stream.readFully(verifyToken)
             return EncryptionResponsePcPacket(
                     sharedSecret = sharedSecret,

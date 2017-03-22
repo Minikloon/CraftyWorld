@@ -11,11 +11,11 @@ class ChatMessageCraftyPacket(
     object Codec : CraftyPacketCodec() {
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ChatMessageCraftyPacket) throw IllegalArgumentException()
-            stream.writeString(obj.text)
+            stream.writeUnsignedString(obj.text)
         }
         override fun deserialize(stream: MinecraftInputStream): CraftyPacket {
             return ChatMessageCraftyPacket(
-                    text = stream.readString()
+                    text = stream.readUnsignedString()
             )
         }
     }

@@ -14,12 +14,12 @@ class ClientPluginMessagePcPacket(
         override val id = 0x09
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientPluginMessagePcPacket) throw IllegalArgumentException()
-            stream.writeString(obj.channel)
+            stream.writeSignedString(obj.channel)
             stream.write(obj.data)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return ClientPluginMessagePcPacket(
-                    channel = stream.readString(),
+                    channel = stream.readSignedString(),
                     data = stream.readBytes(stream.available())
             )
         }

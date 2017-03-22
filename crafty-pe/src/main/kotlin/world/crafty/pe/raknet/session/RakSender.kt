@@ -85,14 +85,14 @@ class RakSender(val session: RakNetworkSession) {
             else {
                 val splitId = messageSplitId++
                 var splitsCount = Math.ceil((packet.size.toDouble() / maxSize)).toInt()
-                val overheadFromSplitting = splitsCount * RakMessage.MetaSplits.size
-                if(packet.size + overheadFromSplitting > splitsCount * maxSize) ++splitsCount
+                val overheadPerSplit = packet.overheadPerSplit
+                if(packet.data.size + splitsCount * overheadPerSplit > splitsCount * maxSize) ++splitsCount
 
                 (0 until splitsCount).map { splitIndex ->
-                    val dataIndex = splitIndex * (maxSize - RakMessage.MetaSplits.size)
+                    val dataIndex = splitIndex * (maxSize - overheadPerSplit)
                     val splitData = packet.data.copyOfRange(
                             dataIndex,
-                            dataIndex + Math.min(maxSize, packet.data.size - dataIndex))
+                            dataIndex + Math.min(maxSize - overheadPerSplit, packet.data.size - dataIndex))
                     RakMessage(
                             RakMessageFlags(packet.headerFlags.reliability, hasSplit = true),
                             RakMessage.MetaReliability(messageSeqNo++),

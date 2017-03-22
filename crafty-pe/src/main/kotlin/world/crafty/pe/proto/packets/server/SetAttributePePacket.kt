@@ -44,7 +44,7 @@ class PlayerAttribute(
             stream.writeFloatLe(obj.maxValue)
             stream.writeFloatLe(obj.value)
             stream.writeFloatLe(obj.defaultValue)
-            stream.writeString(obj.name)
+            stream.writeUnsignedString(obj.name)
         }
         override fun deserialize(stream: MinecraftInputStream): PlayerAttribute {
             return PlayerAttribute(
@@ -52,7 +52,7 @@ class PlayerAttribute(
                     maxValue = stream.readFloat(),
                     value = stream.readFloat(),
                     defaultValue = stream.readFloat(),
-                    name = stream.readString()
+                    name = stream.readUnsignedString()
             )
         }
     }
