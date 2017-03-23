@@ -120,6 +120,7 @@ class RakSender(val session: RakNetworkSession) {
         needAcks.values.forEach { sentDatagram ->
             if(sentDatagram.sinceLastSend.toMillis() > ackTimeoutMs) {
                 queueDatagram(sentDatagram.datagram)
+                println("resend!")
             }
         }
     }

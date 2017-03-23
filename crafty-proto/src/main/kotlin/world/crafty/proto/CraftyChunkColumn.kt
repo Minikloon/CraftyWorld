@@ -1,5 +1,8 @@
 package world.crafty.proto
 
+import world.crafty.proto.server.ChunkCacheStategy
+import world.crafty.proto.server.SetChunkColumnCraftyPacket
+
 class CraftyChunkColumn(
         val x: Int,
         val z: Int,
@@ -13,6 +16,7 @@ class CraftyChunkColumn(
     )
     
     init {
+        require(chunks.size == chunksPerColumn)
         require(biomes.size == 256)
     }
 
@@ -44,5 +48,13 @@ class CraftyChunkColumn(
             chunks[index] = chunk
         }
         return chunk
+    }
+    
+    fun toPacket(cacheStrategy: ChunkCacheStategy = ChunkCacheStategy.PER_WORLD) : SetChunkColumnCraftyPacket {
+        return SetChunkColumnCraftyPacket(this, cacheStrategy)
+    }
+    
+    companion object {
+        val chunksPerColumn = 16
     }
 }

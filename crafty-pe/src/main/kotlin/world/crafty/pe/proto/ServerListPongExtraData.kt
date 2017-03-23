@@ -15,10 +15,9 @@ class ServerListPongExtraData(
     val str = "MCPE;$motdFirstLine;100;1.0.0.7;$onlinePlayers;$maxPlayers;$serverId;$motdSecondLine;Survival;"
     
     fun serialized() : ByteArray {
-        val bs = ByteArrayOutputStream()
-        val stream = MinecraftOutputStream(bs)
-        Codec.serialize(this, stream)
-        return bs.toByteArray()
+        return MinecraftOutputStream.serialized {
+            Codec.serialize(this, it)
+        }
     }
     
     object Codec : PeCodec<ServerListPongExtraData> {

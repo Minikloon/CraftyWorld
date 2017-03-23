@@ -11,4 +11,6 @@ class PrecompressedPayload(val decompressedSize: Int, val payload: ByteArray) : 
         stream.writeSignedVarInt(decompressedSize)
         stream.write(payload)
     }
+
+    override val expectedSize = payload.size + 8
 }

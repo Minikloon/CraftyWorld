@@ -4,4 +4,6 @@ import world.crafty.common.serialization.MinecraftOutputStream
 
 interface LengthPrefixedContent {
     fun serializeWithLengthPrefix(stream: MinecraftOutputStream, compressing: Boolean, compressionThreshold: Int)
+    
+    val expectedSize: Int
 }

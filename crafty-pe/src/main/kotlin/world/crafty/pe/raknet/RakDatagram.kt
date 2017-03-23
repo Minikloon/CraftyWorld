@@ -10,10 +10,9 @@ class RakDatagram(val headerFlags: RakDatagramFlags, val sequenceNumber: Int, va
         get() = MinecraftInputStream(data)
     
     fun serialized() : ByteArray {
-        val bs = ByteArrayOutputStream(data.size + headerSize)
-        val mcStream = MinecraftOutputStream(bs)
-        Codec.serialize(this, mcStream)
-        return bs.toByteArray()
+        return MinecraftOutputStream.serialized(data.size + headerSize) { stream ->
+            Codec.serialize(this, stream)
+        }
     }
     
     object Codec : PeCodec<RakDatagram> {

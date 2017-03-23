@@ -2,6 +2,7 @@ package world.crafty.common.utils
 
 import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
+import java.util.zip.DeflaterOutputStream
 import java.util.zip.Inflater
 
 fun ByteArray.decompressed(algo: CompressionAlgorithm, expectedSize: Int = 0) : ByteArray {    
@@ -11,8 +12,8 @@ fun ByteArray.decompressed(algo: CompressionAlgorithm, expectedSize: Int = 0) : 
     val bufferSize = (if(expectedSize == 0) size else expectedSize) + 32
     
     val bs = ByteArrayOutputStream(bufferSize)
+    val buffer = ByteArray(bufferSize)
     while(! inflater.finished()) {
-        val buffer = ByteArray(bufferSize)
         val decompressedSize = inflater.inflate(buffer)
         bs.write(buffer, 0, decompressedSize)
     }
@@ -28,8 +29,8 @@ fun ByteArray.compressed(algo: CompressionAlgorithm, level: Int = Deflater.DEFAU
     val bufferSize = size + 32
     
     val bs = ByteArrayOutputStream(bufferSize)
+    val buffer = ByteArray(bufferSize)
     while(! deflater.finished()) {
-        val buffer = ByteArray(bufferSize)
         val compressedSize = deflater.deflate(buffer)
         bs.write(buffer, 0, compressedSize)
     }

@@ -165,5 +165,12 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
             }
             return size + 1
         }
+        
+        fun serialized(expectedSize: Int = 32, apply: (MinecraftOutputStream) -> Unit) : ByteArray {
+            val bs = ByteArrayOutputStream(expectedSize)
+            val stream = MinecraftOutputStream(bs)
+            apply(stream)
+            return bs.toByteArray()
+        }
     }
 }

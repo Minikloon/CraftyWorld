@@ -8,11 +8,8 @@ import io.vertx.core.eventbus.EventBus
 import io.vertx.core.net.SocketAddress
 import io.vertx.core.net.impl.SocketAddressImpl
 import kotlinx.coroutines.experimental.launch
-import org.joml.Vector2f
-import org.joml.Vector3f
 import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
-import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.vertx.CurrentVertx
 import world.crafty.common.vertx.vxm
 import world.crafty.pe.proto.PePacket
@@ -23,22 +20,22 @@ import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
 import world.crafty.pe.raknet.*
 import world.crafty.pe.raknet.session.RakNetworkSession
-import world.crafty.proto.GameMode
+import world.crafty.pe.world.toPePacket
+import world.crafty.proto.CraftyChunkColumn
 import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.client.ChatFromClientCraftyPacket
 import world.crafty.proto.client.ChunksRadiusRequestCraftyPacket
 import world.crafty.proto.client.JoinRequestCraftyPacket
 import world.crafty.proto.server.ChatMessageCraftyPacket
+import world.crafty.proto.server.ChunkCacheStategy
+import world.crafty.proto.server.ChunkCacheStategy.*
 import world.crafty.proto.server.ChunksRadiusResponseCraftyPacket
 import world.crafty.proto.server.JoinResponseCraftyPacket
-import world.crafty.proto.server.PreSpawnCraftyPacket
-import java.io.ByteArrayOutputStream
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.spec.X509EncodedKeySpec
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
-import java.util.zip.Deflater
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.SecretKey
@@ -247,12 +244,16 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 println("Requested chunk radius: ${message.desiredChunkRadius}")
                 val chunkRadius = message.desiredChunkRadius
                 queueSend(SetChunkRadiusPePacket(chunkRadius))
-
+                
+                val cache = server.getWorldCache(worldServer)
                 eb.send<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId:chunkRadiusReq", ChunksRadiusRequestCraftyPacket(location.positionVec3(), 0, chunkRadius)) {
                     val response = it.result().body()
                     response.chunkColumns.forEach { setColumn ->
-                        if (setColumn.platform != MinecraftPlatform.PE) throw IllegalStateException("Received a non-pe chunk on pe connserver")
-                        send(EncryptionWrapperPePacket(setColumn.zlibCompressedFullChunkPacket), RELIABLE_ORDERED)
+                        val chunkPacket = when(setColumn.cacheStrategy) {
+                            PER_WORLD -> cache.getOrComputeChunkPacket(setColumn, CraftyChunkColumn::toPePacket)
+                            PER_PLAYER -> setColumn.chunkColumn.toPePacket()
+                        }
+                        send(chunkPacket, RELIABLE_ORDERED)
                     }
                     println("sent pe ${response.chunkColumns.size} chunks")
                     queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))

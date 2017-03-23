@@ -7,6 +7,7 @@ import java.io.OutputStream
 
 abstract class CraftyPacket {
     abstract val codec: CraftyPacketCodec
+    open val expectedSize = 32
     
     fun serialize(stream: OutputStream) {
         val mcStream = MinecraftOutputStream(stream)
@@ -14,10 +15,9 @@ abstract class CraftyPacket {
     }
     
     fun serialized() : ByteArray {
-        val bs = ByteArrayOutputStream()
-        val mcStream = MinecraftOutputStream(bs)
-        serialize(mcStream)
-        return bs.toByteArray()
+        return MinecraftOutputStream.serialized(expectedSize) { stream ->
+            serialize(stream)
+        }
     }
     
     abstract class CraftyPacketCodec {

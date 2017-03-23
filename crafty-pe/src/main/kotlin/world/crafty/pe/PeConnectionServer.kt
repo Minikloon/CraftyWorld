@@ -5,14 +5,18 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.core.datagram.DatagramSocket
 import io.vertx.core.json.Json
 import io.vertx.core.net.SocketAddress
+import world.crafty.pe.proto.packets.mixed.EncryptionWrapperPePacket
+import world.crafty.proto.ConcurrentColumnsCache
 import java.security.KeyPairGenerator
 import java.security.spec.ECGenParameterSpec
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 
 class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var socket: DatagramSocket
     val sessions: MutableMap<SocketAddress, CompletableFuture<PeNetworkSession>> = mutableMapOf()
     val supportsEncryption = false
+    private val worldCaches = ConcurrentHashMap<String, ConcurrentColumnsCache<EncryptionWrapperPePacket>>() // TODO: share between connections server somehow
     
     val keyPair = {
         val keyGen = KeyPairGenerator.getInstance("EC")
@@ -46,5 +50,9 @@ class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
                 throw it.cause()
             }
         }
+    }
+    
+    fun getWorldCache(worldName: String) : ConcurrentColumnsCache<EncryptionWrapperPePacket> {
+        return worldCaches.getOrPut(worldName) { ConcurrentColumnsCache() }
     }
 }

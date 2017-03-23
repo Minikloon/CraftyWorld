@@ -6,12 +6,15 @@ import io.vertx.core.net.NetSocket
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.proto.packets.server.ServerKeepAlivePcPacket
 import world.crafty.pc.mojang.MojangClient
-import java.io.ByteArrayOutputStream
+import world.crafty.pc.proto.PrecompressedPayload
+import world.crafty.proto.ConcurrentColumnsCache
+import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 
 class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var server: NetServer
     val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
+    private val worldCaches = ConcurrentHashMap<String, ConcurrentColumnsCache<PrecompressedPayload>>() // TODO: share between connections server somehow
 
     lateinit var mojang: MojangClient
 
@@ -23,11 +26,10 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
         val rsaKey = generateKeyPair()
         x509PubKey = convertKeyToX509(rsaKey.public).encoded
         decipher = createDecipher(rsaKey)
-
-        val brandStream = ByteArrayOutputStream()
-        val mcStream = MinecraftOutputStream(brandStream)
-        mcStream.writeSignedString("crafty")
-        encodedBrand = brandStream.toByteArray()
+        
+        encodedBrand = MinecraftOutputStream.serialized {
+            it.writeSignedString("crafty")
+        }
     }
 
     override fun start() {
@@ -37,7 +39,7 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
         server.connectHandler {
             val session = PcNetworkSession(this, worldServer, it)
             sessions[it] = session
-            it.handler({ session.receive(it) })
+            it.handler { session.receive(it) }
             println("Received PC connection from ${it.remoteAddress()}")
         }
         server.listen(port)
@@ -53,5 +55,9 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
             for(key in toRemove.keys)
                 sessions.remove(key)
         }
+    }
+    
+    fun getWorldCache(worldName: String) : ConcurrentColumnsCache<PrecompressedPayload> {
+        return worldCaches.getOrPut(worldName) { ConcurrentColumnsCache() }
     }
 }

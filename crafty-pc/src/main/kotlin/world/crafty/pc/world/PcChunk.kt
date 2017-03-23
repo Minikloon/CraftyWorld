@@ -4,25 +4,39 @@ import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.serialization.MinecraftOutputStream.Companion.varIntSize
 import world.crafty.common.utils.LongPackedArray
 import world.crafty.common.utils.NibbleArray
+import world.crafty.proto.CraftyChunk
 
-private val width = 16
-private val height = 16
-private val depth = 16
-private val blocksPerSection = width * height * depth
+private val blocksPerChunk = 16 * 16 * 16
 private val bitsPerBlock = 13
 
-class PcChunk(val typeAndData: LongPackedArray, val blockLight: NibbleArray, val skyLight: NibbleArray?) {
+class PcChunk(
+        val typeAndData: LongPackedArray, 
+        val blockLight: NibbleArray, 
+        val skyLight: NibbleArray?
+) {
+    init {
+        require(typeAndData.backing.size == LongPackedArray.requiredLongs(bitsPerBlock, blocksPerChunk))
+        require(blockLight.size == blocksPerChunk)
+        if(skyLight != null) require(skyLight.size == blocksPerChunk)
+    }
+    
     val byteSize by lazy {
         2 + varIntSize(typeAndData.backing.size * 8) + typeAndData.backing.size * 8 + blockLight.backing.size + (skyLight?.backing?.size ?: 0)
     }
 
     constructor(dimension: Dimension = Dimension.OVERWORLD) : this(
-            NibbleArray(blocksPerSection),
-            if(dimension == Dimension.OVERWORLD) NibbleArray(blocksPerSection) else null
+            NibbleArray(blocksPerChunk),
+            if(dimension == Dimension.OVERWORLD) NibbleArray(blocksPerChunk) else null
     )
 
     constructor(blockLight: NibbleArray, skyLight: NibbleArray?) : this(
-            LongPackedArray(bitsPerBlock, blocksPerSection),
+            LongPackedArray(bitsPerBlock, blocksPerChunk),
+            blockLight,
+            skyLight
+    )
+    
+    constructor(type: ByteArray, data: NibbleArray, blockLight: NibbleArray, skyLight: NibbleArray?) : this(
+            typesAndDataLongPacked(type, data),
             blockLight,
             skyLight
     )
@@ -53,5 +67,24 @@ class PcChunk(val typeAndData: LongPackedArray, val blockLight: NibbleArray, val
         stream.write(blockLight.backing)
         if(skyLight != null)
             stream.write(skyLight.backing)
+    }
+
+    companion object {
+        fun typesAndDataLongPacked(types: ByteArray, data: NibbleArray) : LongPackedArray {
+            val packed = LongPackedArray(bitsPerBlock, blocksPerChunk)
+            for(i in 0 until blocksPerChunk) {
+                val combined = ((types[i].toInt() and 0xFF) shl 4) or data[i]
+                packed[i] = combined
+            }
+            return packed
+        }
+        
+        fun convertCraftyChunk(chunk: CraftyChunk) : PcChunk {
+            return PcChunk(
+                    typeAndData = typesAndDataLongPacked(chunk.blocks, chunk.data),
+                    blockLight = chunk.blockLight,
+                    skyLight = chunk.skyLight
+            )
+        }
     }
 }

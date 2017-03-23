@@ -4,7 +4,6 @@ public final class LongPackedArray {
     private final long[] words;
     private final byte bitsPerValue;
     private final long valueMask;
-    private final int size;
 
     public static final byte bitsPerWord = Long.SIZE;
 
@@ -12,11 +11,10 @@ public final class LongPackedArray {
         if (bitsPerValue > bitsPerWord)
             throw new IllegalArgumentException("bitsPerValue (" + bitsPerValue + ") can't be greater than " + bitsPerWord);
 
-        int longs = (int) Math.ceil((bitsPerValue * capacity) / bitsPerWord);
+        int longs = requiredLongs(bitsPerValue, capacity);
         this.words = new long[longs];
         this.bitsPerValue = (byte) bitsPerValue;
         this.valueMask = (1L << bitsPerValue) - 1L;
-        this.size = capacity;
     }
 
     public long[] getBacking() {
@@ -55,9 +53,8 @@ public final class LongPackedArray {
         }
     }
     
-    // returns size in bits ignoring extra capacity from misalignment
-    public int getSize() {
-        return size;
+    public static int requiredLongs(int bitsPerValue, int capacity) {
+        return (int) Math.ceil((bitsPerValue * capacity) / bitsPerWord);
     }
 }
 

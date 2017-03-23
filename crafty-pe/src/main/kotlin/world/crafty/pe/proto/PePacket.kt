@@ -10,24 +10,24 @@ abstract class PePacket {
     abstract val id: Int
     abstract val codec: PePacketCodec
 
+    open val expectedSize = 32
+    
     fun serialize(stream: OutputStream) {
         val mcStream = MinecraftOutputStream(stream)
         codec.serialize(this, mcStream)
     }
 
     fun serialized() : ByteArray {
-        val bs = ByteArrayOutputStream()
-        val mcStream = MinecraftOutputStream(bs)
-        serialize(mcStream)
-        return bs.toByteArray()
+        return MinecraftOutputStream.serialized(expectedSize) {
+            serialize(it)
+        }
     }
 
     fun serializedWithId() : ByteArray {
-        val bs = ByteArrayOutputStream()
-        val mcStream = MinecraftOutputStream(bs)
-        mcStream.writeByte(id)
-        serialize(mcStream)
-        return bs.toByteArray()
+        return MinecraftOutputStream.serialized(expectedSize) { stream ->
+            stream.writeByte(id)
+            serialize(stream)
+        }
     }
 
     abstract class PePacketCodec {

@@ -16,12 +16,13 @@ class CompressionWrapperPePacket(
 ) : PePacket() {
     constructor(vararg packets: PePacket) : this(packets.toList())
 
+    override val expectedSize = packets.sumBy { it.expectedSize }
+    
     fun serializedWithId(level: Int) : ByteArray {
-        val bs = ByteArrayOutputStream()
-        val mcStream = MinecraftOutputStream(bs)
-        mcStream.writeByte(id)
-        Codec.serialize(this, mcStream, level)
-        return bs.toByteArray()
+        return MinecraftOutputStream.serialized(expectedSize) { stream ->
+            stream.writeByte(id)
+            Codec.serialize(this, stream, level)
+        }
     }
 
     override val id = Codec.id
@@ -33,15 +34,15 @@ class CompressionWrapperPePacket(
             serialize(obj, stream, Deflater.DEFAULT_COMPRESSION)
         }
         fun serialize(obj: CompressionWrapperPePacket, stream: MinecraftOutputStream, level: Int) {
-            val bs = ByteArrayOutputStream()
-            val mcStream = MinecraftOutputStream(bs)
-            obj.packets.forEach {
-                val serialized = it.serialized()
-                mcStream.writeUnsignedVarInt(serialized.size + 1) // 1 for packet id
-                mcStream.writeByte(it.id)
-                mcStream.write(serialized)
+            val wrappedPackets = MinecraftOutputStream.serialized { mcStream ->
+                obj.packets.forEach {
+                    val serialized = it.serialized()
+                    mcStream.writeUnsignedVarInt(serialized.size + 1) // 1 for packet id
+                    mcStream.writeByte(it.id)
+                    mcStream.write(serialized)
+                }
             }
-            val compressed = bs.toByteArray().compressed(CompressionAlgorithm.ZLIB, level)
+            val compressed = wrappedPackets.compressed(CompressionAlgorithm.ZLIB, level)
             stream.writeUnsignedVarInt(compressed.size)
             stream.write(compressed)
         }

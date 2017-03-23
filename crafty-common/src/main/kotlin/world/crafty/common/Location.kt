@@ -28,7 +28,7 @@ class Angle256 constructor(val increment: Byte) {
     }
 }
 
-data class Location(
+class Location(
         val x: Float,
         val y: Float,
         val z: Float,
