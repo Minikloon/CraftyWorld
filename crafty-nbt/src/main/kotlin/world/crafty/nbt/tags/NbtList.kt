@@ -1,6 +1,7 @@
 package world.crafty.nbt.tags
 
 import world.crafty.nbt.NbtInputStream
+import java.io.DataOutput
 import java.io.DataOutputStream
 import java.util.*
 
@@ -106,7 +107,7 @@ class NbtList(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(name
     object Codec : NbtTagCodec() {
         override val id = 9
 
-        override fun serialize(obj: Any, stream: DataOutputStream) {
+        override fun serialize(obj: Any, stream: DataOutput) {
             if(obj !is NbtList) throw IllegalArgumentException()
             stream.writeByte(obj.listType.codec.id)
             stream.writeInt(obj.tags.size)

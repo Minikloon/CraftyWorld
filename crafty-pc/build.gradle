@@ -4,4 +4,6 @@ version '1.0-SNAPSHOT'
 dependencies {
     compile project(":crafty-proto")
     compile project(":crafty-nbt")
+    compile project(":crafty-mojang")
+    compile project(":crafty-skinpool")
 }

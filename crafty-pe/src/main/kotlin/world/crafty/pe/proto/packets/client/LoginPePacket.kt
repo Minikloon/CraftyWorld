@@ -13,7 +13,7 @@ class LoginPePacket(
         val protocolVersion: Int,
         val edition: Int,
         val certChain: List<PeJwt>,
-        val skinJwt: String
+        val clientData: PeJwt
 ) : PePacket() {
     override val id = Codec.id
     override val codec = Codec
@@ -23,8 +23,7 @@ class LoginPePacket(
             if(obj !is LoginPePacket) throw IllegalArgumentException()
             stream.writeInt(obj.protocolVersion)
             stream.writeByte(obj.edition)
-            val payload = obj.certChain.toString().toByteArray() + obj.skinJwt.toString().toByteArray()
-            stream.write(payload.compressed(CompressionAlgorithm.ZLIB))
+            throw NotImplementedError()
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
             val protocolVersion = stream.readInt()
@@ -40,13 +39,14 @@ class LoginPePacket(
             val chainJson = JsonObject(chainStr)
             val certChain = chainJson.getJsonArray("chain").map { PeJwt.parse(it as String) }
 
-            val skinJwt = pStream.readUnsignedString(pStream.readIntLe())
-
+            val clientDataStr = pStream.readUnsignedString(pStream.readIntLe())
+            val clientData = PeJwt.parse(clientDataStr)
+            
             return LoginPePacket(
                     protocolVersion = protocolVersion,
                     edition = edition,
                     certChain = certChain,
-                    skinJwt = skinJwt
+                    clientData = clientData
             )
         }
     }

@@ -1,14 +1,17 @@
 package world.crafty.nbt
 
+import world.crafty.common.serialization.LittleEndianDataInputStream
 import world.crafty.nbt.tags.NbtTag
 import world.crafty.nbt.tags.NbtTagType
-import java.io.ByteArrayInputStream
-import java.io.DataInputStream
-import java.io.EOFException
-import java.io.InputStream
+import java.io.*
 
-class NbtInputStream(stream: InputStream) : DataInputStream(stream) {
-    constructor(bytes: ByteArray) : this(ByteArrayInputStream(bytes))
+class NbtInputStream(stream: DataInput) : DataInput by stream {
+    constructor(bytes: ByteArray, littleEndian: Boolean) : this(
+            if(littleEndian)
+                LittleEndianDataInputStream(ByteArrayInputStream(bytes))
+            else
+                DataInputStream(ByteArrayInputStream(bytes))
+    )
 
     fun readTag() : NbtTag? {
         val id = try {

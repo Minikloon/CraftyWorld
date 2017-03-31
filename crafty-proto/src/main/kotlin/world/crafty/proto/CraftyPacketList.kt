@@ -4,17 +4,31 @@ import io.vertx.core.eventbus.EventBus
 import world.crafty.proto.client.ChatFromClientCraftyPacket
 import world.crafty.proto.client.ChunksRadiusRequestCraftyPacket
 import world.crafty.proto.client.JoinRequestCraftyPacket
-import world.crafty.proto.server.ChatMessageCraftyPacket
-import world.crafty.proto.server.ChunksRadiusResponseCraftyPacket
-import world.crafty.proto.server.JoinResponseCraftyPacket
-import world.crafty.proto.server.PreSpawnCraftyPacket
+import world.crafty.proto.client.ReadyToSpawnCraftyPacket
+import world.crafty.proto.server.*
+
+private var registered = false
+private val lock = Any()
 
 fun registerVertxCraftyCodecs(eb: EventBus) {
-    eb.registerDefaultCodec(JoinRequestCraftyPacket::class.java, CraftyVertxCodec(JoinRequestCraftyPacket::class.java, JoinRequestCraftyPacket.Codec))
-    eb.registerDefaultCodec(JoinResponseCraftyPacket::class.java, CraftyVertxCodec(JoinResponseCraftyPacket::class.java, JoinResponseCraftyPacket.Codec))
-    eb.registerDefaultCodec(ChatFromClientCraftyPacket::class.java, CraftyVertxCodec(ChatFromClientCraftyPacket::class.java, ChatFromClientCraftyPacket.Codec))
-    eb.registerDefaultCodec(ChatMessageCraftyPacket::class.java, CraftyVertxCodec(ChatMessageCraftyPacket::class.java, ChatMessageCraftyPacket.Codec))
-    eb.registerDefaultCodec(PreSpawnCraftyPacket::class.java, CraftyVertxCodec(PreSpawnCraftyPacket::class.java, PreSpawnCraftyPacket.Codec))
-    eb.registerDefaultCodec(ChunksRadiusRequestCraftyPacket::class.java, CraftyVertxCodec(ChunksRadiusRequestCraftyPacket::class.java, ChunksRadiusRequestCraftyPacket.Codec))
-    eb.registerDefaultCodec(ChunksRadiusResponseCraftyPacket::class.java, CraftyVertxCodec(ChunksRadiusResponseCraftyPacket::class.java, ChunksRadiusResponseCraftyPacket.Codec))
+    synchronized(lock) {
+        if(registered) return
+        registered = true
+    }
+    
+    eb.registerDefaultCodec<JoinRequestCraftyPacket>(JoinRequestCraftyPacket.Codec)
+    eb.registerDefaultCodec<JoinResponseCraftyPacket>(JoinResponseCraftyPacket.Codec)
+    eb.registerDefaultCodec<ChatFromClientCraftyPacket>(ChatFromClientCraftyPacket.Codec)
+    eb.registerDefaultCodec<ChatMessageCraftyPacket>(ChatMessageCraftyPacket.Codec)
+    eb.registerDefaultCodec<PreSpawnCraftyPacket>(PreSpawnCraftyPacket.Codec)
+    eb.registerDefaultCodec<ChunksRadiusRequestCraftyPacket>(ChunksRadiusRequestCraftyPacket.Codec)
+    eb.registerDefaultCodec<ChunksRadiusResponseCraftyPacket>(ChunksRadiusResponseCraftyPacket.Codec)
+    eb.registerDefaultCodec<ReadyToSpawnCraftyPacket>(ReadyToSpawnCraftyPacket.Codec)
+    eb.registerDefaultCodec<UpdatePlayerListCraftyPacket>(UpdatePlayerListCraftyPacket.Codec)
+    eb.registerDefaultCodec<SpawnSelfCraftyPacket>(SpawnSelfCraftyPacket.Codec)
+}
+
+private inline fun <reified T : CraftyPacket> EventBus.registerDefaultCodec(codec: CraftyPacket.CraftyPacketCodec) {
+    val clazz = T::class.java
+    registerDefaultCodec<T>(clazz, CraftyVertxCodec(clazz, codec))
 }

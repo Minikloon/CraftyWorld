@@ -12,7 +12,7 @@ class SetAdventureSettingsPePacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PePacketCodec() {
-        override val id = 0x37
+        override val id = 0x38
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetAdventureSettingsPePacket) throw IllegalArgumentException()
             stream.writeUnsignedVarInt(obj.settings.bitField)

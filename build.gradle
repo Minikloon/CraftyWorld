@@ -2,7 +2,7 @@ group 'world.crafty'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.1.0'
+    ext.kotlin_version = '1.1.1-dev-504'
     repositories {
         mavenCentral()
     }
@@ -16,15 +16,18 @@ subprojects  {
 
     repositories {
         mavenCentral()
+        jcenter()
     }
 
     dependencies {
         compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
+        compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+        compile "org.jetbrains.kotlinx:kotlinx-coroutines-core:0.14"
     }
 
     kotlin {
         experimental {
-            coroutines "enable"
+            coroutines 'enable'
         }
     }
 }

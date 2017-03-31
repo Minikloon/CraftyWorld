@@ -1,6 +1,9 @@
 package world.crafty.nbt.tags
 
+import world.crafty.common.serialization.LittleEndianDataOutputStream
 import world.crafty.nbt.NbtInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataOutput
 import java.io.DataOutputStream
 import java.util.*
 
@@ -78,10 +81,17 @@ class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(
         }
         sb.append('}')
     }
+    
+    fun toBytes(littleEndian: Boolean = false) : ByteArray {
+        val bs = ByteArrayOutputStream()
+        val os: DataOutput = if(littleEndian) LittleEndianDataOutputStream(bs) else DataOutputStream(bs)
+        Codec.serialize(this, os)
+        return bs.toByteArray()
+    }
 
     object Codec : NbtTagCodec() {
         override val id = 10
-        override fun serialize(obj: Any, stream: DataOutputStream) {
+        override fun serialize(obj: Any, stream: DataOutput) {
             if(obj !is NbtCompound) throw IllegalArgumentException()
             obj.tags.values.forEach { it.codec.serialize(it, stream) }
             stream.writeByte(NbtEnd.Codec.id)

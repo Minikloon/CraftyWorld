@@ -1,6 +1,7 @@
 package world.crafty.server
 
 import io.vertx.core.AbstractVerticle
+import world.crafty.common.vertx.typedSend
 import world.crafty.proto.GameMode
 import world.crafty.proto.client.JoinRequestCraftyPacket
 import world.crafty.proto.registerVertxCraftyCodecs
@@ -22,16 +23,31 @@ class CraftyServer(val address: String, val world: World) : AbstractVerticle() {
         eb.consumer<JoinRequestCraftyPacket>("$address:join") {
             val request = it.body()
             val playerId = ++playerIdCounter
-            val player = CraftyPlayer(this, playerId, request.username, request.authMojang, request.authXbox, request.platform)
+            val player = CraftyPlayer(this, playerId, request.username, request.authMojang, request.authXbox, request.platform, request.skin)
             playersById[playerId] = player
             player.setupConsumers(eb)
             println("(Crafty) ${it.body().username} joined, id $playerId!")
             it.reply(JoinResponseCraftyPacket(playerId, PreSpawnCraftyPacket(
-                    entityId = 2,
+                    entityId = player.id,
                     spawnLocation = world.spawn,
                     dimension = 0,
                     gamemode = GameMode.CREATIVE
             )))
+        }
+    }
+    
+    fun typedSendAll(obj: Any) {
+        val eb = vertx.eventBus()
+        playersById.forEach { id, player -> 
+            eb.typedSend("p:c:$id", obj)
+        }
+    }
+    
+    fun typedSendAllExcept(except: CraftyPlayer, obj: Any) {
+        val eb = vertx.eventBus()
+        playersById.forEach { id, player ->
+            if(player != except) 
+                eb.typedSend("p:c:$id", obj)
         }
     }
 }

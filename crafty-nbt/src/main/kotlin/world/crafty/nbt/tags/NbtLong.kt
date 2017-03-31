@@ -1,6 +1,7 @@
 package world.crafty.nbt.tags
 
 import world.crafty.nbt.NbtInputStream
+import java.io.DataOutput
 import java.io.DataOutputStream
 
 class NbtLong(name: String?, val value: Long) : NbtValueTag(name) {
@@ -18,7 +19,7 @@ class NbtLong(name: String?, val value: Long) : NbtValueTag(name) {
     object Codec : NbtTagCodec() {
         override val id = 4
 
-        override fun serialize(obj: Any, stream: DataOutputStream) {
+        override fun serialize(obj: Any, stream: DataOutput) {
             if(obj !is NbtLong) throw IllegalArgumentException()
             stream.writeLong(obj.value)
         }

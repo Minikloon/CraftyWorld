@@ -6,4 +6,6 @@ include 'crafty-proto'
 include 'crafty-common'
 include 'crafty-bootstrap'
 include 'crafty-nbt'
+include 'crafty-skinpool'
+include 'crafty-mojang'
 

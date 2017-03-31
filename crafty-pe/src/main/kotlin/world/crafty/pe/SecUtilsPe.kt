@@ -1,17 +1,18 @@
 package world.crafty.pe
 
 import world.crafty.pe.jwt.PeJwt
+import world.crafty.pe.jwt.payloads.CertChainLink
 import java.security.KeyFactory
 import java.security.PublicKey
 import java.security.SecureRandom
 import java.security.spec.X509EncodedKeySpec
 import java.util.*
 
-fun isCertChainValid(chain: List<PeJwt>, rootKey: PublicKey? = null) : Boolean {
+fun isCertChainValid(chain: List<PeJwt>) : Boolean {
     if(chain.isEmpty()) return false
-    if(rootKey != null && chain[0].header.x5uKey != rootKey) return false
     for(i in 0 until (chain.size - 1)) {
-        if(chain[i].payload.idPubKey != chain[i+1].header.x5uKey)
+        val payload = chain[i].payload as CertChainLink
+        if(payload.idPubKey != chain[i+1].header.x5uKey)
             return false
     }
     return chain.none { !it.isSignatureValid }

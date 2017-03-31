@@ -10,7 +10,7 @@ class SetChunkRadiusPePacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PePacketCodec() {
-        override val id = 0x45
+        override val id = 0x46
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetChunkRadiusPePacket) throw IllegalArgumentException()
             stream.writeZigzagVarInt(obj.chunkRadius)

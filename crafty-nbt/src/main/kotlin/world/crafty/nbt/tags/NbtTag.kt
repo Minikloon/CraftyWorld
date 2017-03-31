@@ -1,7 +1,7 @@
 package world.crafty.nbt.tags
 
 import world.crafty.nbt.NbtInputStream
-import java.io.DataOutputStream
+import java.io.DataOutput
 
 abstract class NbtTag(val name: String?) {
     var parent: NbtTag? = null
@@ -34,7 +34,7 @@ abstract class NbtTag(val name: String?) {
 
     abstract class NbtTagCodec {
         abstract val id: Int
-        abstract fun serialize(obj: Any, stream: DataOutputStream)
+        abstract fun serialize(obj: Any, stream: DataOutput)
         open fun deserialize(stream: NbtInputStream) : NbtTag {
             val name = stream.readUTF()
             return deserialize(name, stream)

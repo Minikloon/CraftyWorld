@@ -16,6 +16,7 @@ dependencies {
     compile project(":crafty-pe")
     compile project(":crafty-pc")
     compile project(":crafty-server")
+    compile project(":crafty-skinpool")
 }
 
 jar {

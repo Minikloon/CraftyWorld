@@ -1,7 +1,13 @@
 package world.crafty.pc
 
+import io.netty.handler.codec.http.HttpResponseStatus
 import io.vertx.core.buffer.Buffer
+import io.vertx.core.eventbus.Message
+import io.vertx.core.json.JsonObject
 import io.vertx.core.net.NetSocket
+import io.vertx.ext.web.client.WebClient
+import kotlinx.coroutines.experimental.Deferred
+import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.launch
 import org.joml.Vector3i
 import world.crafty.common.serialization.MinecraftInputStream
@@ -13,26 +19,24 @@ import world.crafty.pc.proto.packets.client.*
 import world.crafty.pc.proto.packets.server.*
 import world.crafty.common.Location
 import world.crafty.common.utils.CompressionAlgorithm
-import world.crafty.common.utils.compressed
 import world.crafty.common.utils.decompressed
-import world.crafty.common.vertx.BufferOutputStream
+import world.crafty.common.utils.hashFnv1a64
+import world.crafty.common.vertx.*
 import world.crafty.pc.metadata.PlayerMetadata
 import world.crafty.proto.client.JoinRequestCraftyPacket
-import world.crafty.proto.server.JoinResponseCraftyPacket
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import world.crafty.common.vertx.CurrentVertx
-import world.crafty.common.vertx.vxm
 import world.crafty.pc.world.toPcPacket
 import world.crafty.proto.CraftyChunkColumn
+import world.crafty.proto.CraftySkin
 import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.client.ChatFromClientCraftyPacket
 import world.crafty.proto.client.ChunksRadiusRequestCraftyPacket
-import world.crafty.proto.server.ChatMessageCraftyPacket
-import world.crafty.proto.server.ChunkCacheStategy
-import world.crafty.proto.server.ChunksRadiusResponseCraftyPacket
-import java.time.Duration
-import java.time.Instant
+import world.crafty.proto.client.ReadyToSpawnCraftyPacket
+import world.crafty.proto.server.*
+import world.crafty.skinpool.CraftySkinPoolServer
+import world.crafty.skinpool.protocol.client.HashPollPoolPacket
+import world.crafty.skinpool.protocol.client.SaveSkinPoolPacket
+import world.crafty.skinpool.protocol.server.HashPollReplyPoolPacket
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
 import javax.crypto.Cipher
@@ -200,9 +204,27 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 val serverId = server.mojang.getServerIdHash(sessionId, sharedSecret, server.x509PubKey)
                 val profile = server.mojang.checkHasJoinedAsync(username, serverId)
                 
-                println("mojang replied to $username auth")
+                val textureProp = profile.properties.first { it.name == "textures" } // TODO: cache pc skins in pool for faster login
+                val texturePropValue = Base64.getDecoder().decode(textureProp.value)
+                val textureJson = JsonObject(texturePropValue.toString(Charsets.UTF_8)).getJsonObject("textures")
+                val skinJson = textureJson.getJsonObject("SKIN")
+                val isSkinSlim = skinJson.getJsonObject("metadata") != null
+                val skinUrl = skinJson.getString("url")
+                val httpClient = WebClient.create(server.vertx)
+                val response = vxHttp { httpClient.getAbs(skinUrl).send(it) }
+                if(response.statusCode() != HttpResponseStatus.OK.code()) {
+                   throw IllegalStateException("Couldn't download pc skin for $username at $skinUrl")
+                }
+                val skinPngBytes = response.body().bytes
+                val skinHash = hashFnv1a64(skinPngBytes)
+                val skin = CraftySkin(skinHash, skinPngBytes)
+
+                val skinPollReply = eb.typedSendAsync<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, HashPollPoolPacket(skinHash, false)).body()
+                if(! skinPollReply.hasProfile) {
+                    eb.typedSend(CraftySkinPoolServer.channelPrefix, SaveSkinPoolPacket(skinHash, isSkinSlim, skinPngBytes))
+                }
                 
-                val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false, MinecraftPlatform.PC), it) }
+                val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false, MinecraftPlatform.PC, skin), it) }
                 
                 if(!craftyResponse.accepted)
                     throw IllegalStateException("Crafty refused us from joining") // TODO: handle failure
@@ -230,7 +252,6 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 ))
                 send(ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
                 
-                val req = Instant.now()
                 eb.send<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId:chunkRadiusReq", ChunksRadiusRequestCraftyPacket(prespawn.spawnLocation.positionVec3(), 0, 8)) {
                     val response = it.result().body()
                     val cache = server.getWorldCache(worldServer)
@@ -241,12 +262,19 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                         }
                         send(chunkPacket)
                     }
-                    println("chunking ${Duration.between(req, Instant.now()).toMillis()} ms")
-                    send(SetSpawnPositionPcPacket(Vector3i(location.x.toInt(), location.y.toInt(), location.z.toInt())))
-                    send(ServerChatMessagePcPacket(McChat("Welcome!"), ChatPosition.CHAT_BOX))
 
+                    eb.typedConsumer("p:c:$craftyPlayerId", UpdatePlayerListCraftyPacket::class) {
+                        launch(CurrentVertx) {
+                            handleUpdatePlayerList(it)
+                        }
+                    }
 
-                    send(PlayerListHeaderFooterPcPacket(McChat("Header"), McChat("Footer")))
+                    eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {
+                        send(SetSpawnPositionPcPacket(Vector3i(location.x.toInt(), location.y.toInt(), location.z.toInt())))
+                        send(TeleportPlayerPcPacket(PcLocation(location), 0, 1))
+                    }
+                    
+                    eb.typedSend("p:s:$craftyPlayerId", ReadyToSpawnCraftyPacket())
 
                     val playerMetadata = PlayerMetadata(
                             status = 0,
@@ -266,12 +294,10 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                             skinParts = 0b1111111
                     )
 
-                    send(TeleportPlayerPcPacket(PcLocation(location), 0, 1))
-
                     /*
                 server.sessions.values.forEach {
                     it.send(PlayerListItemPcPacket(0, listOf(
-                            PlayerListItemPcPacket.PlayerListItemAdd(
+                            PlayerListItemPcPacket.PlayerListPcAdd(
                                     uuid = profile.uuid,
                                     name = profile.name,
                                     properties = profile.properties,
@@ -294,6 +320,59 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
             else -> {
                 println("Unhandled Login packet ${packet.javaClass.simpleName}")
             }
+        }
+    }
+    
+    suspend private fun handleUpdatePlayerList(message: Message<UpdatePlayerListCraftyPacket>) { // TODO: move this out of the session
+        val byItemType = message.body().items.groupBy { it.type }
+        byItemType.forEach {
+            val itemType = it.key
+            val craftyItems = it.value
+            
+            val action: Int
+            val pcItems = mutableListOf<PlayerListPcItem>()
+            
+            when(itemType) {
+                PlayerListItemType.ADD -> {
+                    action = PlayerListPcAdd.Codec.action
+                    
+                    class getUuidProfile(val craftyItem: PlayerListAdd, val getProfile: Deferred<Message<HashPollReplyPoolPacket>>)
+                    craftyItems.map {
+                        val add = it as PlayerListAdd
+                        val req = HashPollPoolPacket(add.skin.fnvHashOfPng, true)
+                        val getProfile = async(CurrentVertx) {
+                            eb.typedSendAsync<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, req)
+                        }
+                        getUuidProfile(add, getProfile)
+                    }.forEach {
+                        val craftyItem = it.craftyItem
+                        val textureProp = it.getProfile.await().body().textureProp
+                        val playerProps = if(textureProp == null) emptyList() else listOf(textureProp)
+                        println("pc add to player list ${craftyItem.uuid} ${craftyItem.name}")
+                        pcItems.add(PlayerListPcAdd(
+                                uuid = craftyItem.uuid,
+                                name = craftyItem.name,
+                                properties = playerProps,
+                                gamemode = 0,
+                                ping = 50,
+                                displayName = null
+                        ))
+                    }                    
+                }
+                PlayerListItemType.REMOVE -> {
+                    action = PlayerListPcRemove.Codec.action
+                    pcItems.addAll(craftyItems.map {
+                        PlayerListPcRemove(
+                                uuid = it.uuid
+                        )
+                    })
+                }
+            }
+            
+            send(PlayerListItemPcPacket(
+                    action = action,
+                    items = pcItems
+            ))
         }
     }
 

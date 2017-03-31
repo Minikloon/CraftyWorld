@@ -6,8 +6,9 @@ repositories {
 }
 
 dependencies {
-    compile "io.vertx:vertx-core:3.3.3"
-    compile "com.fasterxml.jackson.module:jackson-module-kotlin:2.8.4"
+    compile "io.vertx:vertx-core:3.4.1"
+    compile "io.vertx:vertx-web-client:3.4.1"
     compile "org.joml:joml:1.9.2"
-    compile 'org.jetbrains.kotlinx:kotlinx-coroutines-core:0.14'
+    compile "com.fasterxml.jackson.module:jackson-module-kotlin:2.8.7"
+    compile "com.fasterxml.jackson.core:jackson-databind:2.8.7" // override vert.x
 }

@@ -1,6 +1,6 @@
 package world.crafty.pe
 
-import world.crafty.pe.jwt.LoginExtraData
+import world.crafty.pe.jwt.payloads.LoginExtraData
 import world.crafty.pe.raknet.RakMessageReliability.*
 import io.vertx.core.Vertx
 import io.vertx.core.datagram.DatagramSocket
@@ -10,9 +10,12 @@ import io.vertx.core.net.impl.SocketAddressImpl
 import kotlinx.coroutines.experimental.launch
 import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
-import world.crafty.common.vertx.CurrentVertx
-import world.crafty.common.vertx.vxm
+import world.crafty.common.utils.hashFnv1a64
+import world.crafty.common.vertx.*
+import world.crafty.pe.jwt.payloads.CertChainLink
+import world.crafty.pe.jwt.payloads.PeClientData
 import world.crafty.pe.proto.PePacket
+import world.crafty.pe.proto.PeSkin
 import world.crafty.pe.proto.ServerBoundPeTopLevelPackets
 import world.crafty.pe.proto.ServerListPongExtraData
 import world.crafty.pe.proto.packets.client.*
@@ -22,15 +25,18 @@ import world.crafty.pe.raknet.*
 import world.crafty.pe.raknet.session.RakNetworkSession
 import world.crafty.pe.world.toPePacket
 import world.crafty.proto.CraftyChunkColumn
+import world.crafty.proto.CraftySkin
 import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.client.ChatFromClientCraftyPacket
 import world.crafty.proto.client.ChunksRadiusRequestCraftyPacket
 import world.crafty.proto.client.JoinRequestCraftyPacket
-import world.crafty.proto.server.ChatMessageCraftyPacket
-import world.crafty.proto.server.ChunkCacheStategy
+import world.crafty.proto.client.ReadyToSpawnCraftyPacket
+import world.crafty.proto.server.*
 import world.crafty.proto.server.ChunkCacheStategy.*
-import world.crafty.proto.server.ChunksRadiusResponseCraftyPacket
-import world.crafty.proto.server.JoinResponseCraftyPacket
+import world.crafty.skinpool.CraftySkinPoolServer
+import world.crafty.skinpool.protocol.client.HashPollPoolPacket
+import world.crafty.skinpool.protocol.client.SaveSkinPoolPacket
+import world.crafty.skinpool.protocol.server.HashPollReplyPoolPacket
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.spec.X509EncodedKeySpec
@@ -44,7 +50,11 @@ import javax.crypto.spec.SecretKeySpec
 
 class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, socket: DatagramSocket, address: SocketAddress) : RakNetworkSession(socket, address) {
     private var loggedIn = false
-    var loginExtraData: LoginExtraData? = null
+    var loginExtraData: LoginExtraData? = null // TODO: split the session by login stages to avoid these shits
+        private set
+    var loginClientData: PeClientData? = null
+        private set
+    var craftySkin: CraftySkin? = null
         private set
     
     private var craftyPlayerId = 0
@@ -129,14 +139,41 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
             }
             is LoginPePacket -> {
                 val chain = message.certChain
-                val rootCert = if(chain[0].payload.iss == "RealmsAuthorization") mojangPubKey else null
-                if(! isCertChainValid(chain, rootCert))
+                
+                val firstChainLink = chain[0].payload as CertChainLink
+                if(firstChainLink.certificateAuthority && firstChainLink.idPubKey != mojangPubKey) {
+                    throw Exception("Login first chain link claims to be ca but doesn't hold the mojang pub key")
+                }
+                
+                if(! isCertChainValid(chain))
                     throw NotImplementedError("Should do something about invalid cert chain")
 
-                val claims = chain.last().payload
-
-                val clientKey = claims.idPubKey
-                loginExtraData = claims.extraData
+                val lastClaim = chain.last().payload as CertChainLink
+                val clientKey = lastClaim.idPubKey
+                loginExtraData = lastClaim.extraData
+                
+                val clientDataJwt = message.clientData
+                if(clientDataJwt.header.x5uKey != clientKey || !clientDataJwt.isSignatureValid) {
+                    throw NotImplementedError("Should do something about invalid client data signature")
+                }
+                
+                val clientData = clientDataJwt.payload as PeClientData
+                loginClientData = clientData
+                val png = clientData.skinPng
+                val skinHash = hashFnv1a64(png)
+                craftySkin = CraftySkin(skinHash, png)
+                eb.typedSend<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, HashPollPoolPacket(skinHash, false)) {
+                    if(it.failed()) {
+                        it.cause().printStackTrace()
+                        return@typedSend
+                    }
+                    val res = it.result()
+                    if(! res.body().hasProfile) {
+                        val slim = isSlim(clientData.skinData)
+                        val skinPng = clientData.skinPng
+                        eb.typedSend(CraftySkinPoolServer.channelPrefix, SaveSkinPoolPacket(skinHash, slim, skinPng))
+                    }
+                }
                 
                 if(server.supportsEncryption) { // TODO encrypt if xuid exists
                     val agreement = KeyAgreement.getInstance("ECDH")
@@ -173,7 +210,8 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 println("resource pack response status: ${message.status}")
                 val startGame: suspend () -> Unit = {
                     val username = loginExtraData?.displayName ?: throw IllegalStateException("ResourcePackClientResponse without prior login!")
-                    val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false, MinecraftPlatform.PE), it) }
+                    val skin = craftySkin ?: throw IllegalStateException("ResourcePackClientResponse without skin!")
+                    val craftyResponse = vxm<JoinResponseCraftyPacket> { eb.send("$worldServer:join", JoinRequestCraftyPacket(username, true, false, MinecraftPlatform.PE, skin), it) }
                     if (!craftyResponse.accepted)
                         throw IllegalStateException("CraftyServer denied our join request :(")
 
@@ -211,21 +249,6 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     
                     queueSend(SetChunkRadiusPePacket(5))
                     queueSend(SetAttributesPePacket(0, PlayerAttribute.defaults))
-                    /*
-                    queueSend(SetTimePePacket(60000, false))
-                    queueSend(SetDifficultyPePacket(0))
-                    queueSend(SetCommandsEnabledPePacket(false))
-                    queueSend(SetAdventureSettingsPePacket(AdventureSettingsFlags(
-                            worldImmutable = false,
-                            noPvp = false,
-                            noPve = false,
-                            passiveMobs = false,
-                            autoJump = false,
-                            allowFly = false,
-                            noClip = false
-                    ), 0
-                     queueSend(SetAttributesPePacket(0, PlayerAttribute.defaults))
-                    */
                 }
                 println("status ${message.status}")
                 when(message.status) {
@@ -245,6 +268,49 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 val chunkRadius = message.desiredChunkRadius
                 queueSend(SetChunkRadiusPePacket(chunkRadius))
                 
+                eb.typedConsumer("p:c:$craftyPlayerId", UpdatePlayerListCraftyPacket::class) {
+                    val byItemType = it.body().items.groupBy { it.type }
+                    byItemType.forEach {
+                        val itemType = it.key
+                        val craftyItems = it.value
+
+                        val action: Int
+                        val peItems = mutableListOf<PlayerListPeItem>()
+
+                        when(itemType) {
+                            PlayerListItemType.ADD -> {
+                                action = PlayerListPeAdd.Codec.action
+                                peItems.addAll(craftyItems.map {
+                                    val add = it as PlayerListAdd
+                                    PlayerListPeAdd(
+                                            uuid = add.uuid,
+                                            entityId = add.entityId,
+                                            name = add.name,
+                                            skin = PeSkin.fromCrafty(add.skin)
+                                    )
+                                })
+                            }
+                            PlayerListItemType.REMOVE -> {
+                                action = PlayerListPeRemove.Codec.action
+                                peItems.addAll(craftyItems.map { 
+                                    PlayerListPeRemove(
+                                            uuid = it.uuid
+                                    )
+                                })
+                            }
+                        }
+                        
+                        queueSend(PlayerListItemPePacket(
+                                action = action,
+                                items = peItems
+                        ))
+                    }
+                }
+                
+                eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {
+                    queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
+                }
+                
                 val cache = server.getWorldCache(worldServer)
                 eb.send<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId:chunkRadiusReq", ChunksRadiusRequestCraftyPacket(location.positionVec3(), 0, chunkRadius)) {
                     val response = it.result().body()
@@ -256,11 +322,12 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                         send(chunkPacket, RELIABLE_ORDERED)
                     }
                     println("sent pe ${response.chunkColumns.size} chunks")
-                    queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
+                    
+                    eb.typedSend("p:s:$craftyPlayerId", ReadyToSpawnCraftyPacket())
                 }
             }
             is PlayerActionPePacket -> {
-                println("action ${message.action}")
+                println("action ${message.action}") 
             }
             is SetPlayerPositionPePacket -> {
                 //println("pos: ${message.x} ${message.y} ${message.z}")

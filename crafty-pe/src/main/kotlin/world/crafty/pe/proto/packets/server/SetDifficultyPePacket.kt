@@ -10,7 +10,7 @@ class SetDifficultyPePacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PePacketCodec() {
-        override val id = 0x3c
+        override val id = 0x3d
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetDifficultyPePacket) throw IllegalArgumentException()
             stream.writeUnsignedVarInt(obj.difficulty)

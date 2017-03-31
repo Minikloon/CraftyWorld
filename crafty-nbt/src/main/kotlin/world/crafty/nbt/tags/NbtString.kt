@@ -1,6 +1,7 @@
 package world.crafty.nbt.tags
 
 import world.crafty.nbt.NbtInputStream
+import java.io.DataOutput
 import java.io.DataOutputStream
 
 class NbtString(name: String?, val value: String) : NbtValueTag(name) {
@@ -18,7 +19,7 @@ class NbtString(name: String?, val value: String) : NbtValueTag(name) {
     object Codec : NbtTagCodec() {
         override val id = 8
 
-        override fun serialize(obj: Any, stream: DataOutputStream) {
+        override fun serialize(obj: Any, stream: DataOutput) {
             if(obj !is NbtString) throw IllegalArgumentException()
             stream.writeUTF(obj.value)
         }

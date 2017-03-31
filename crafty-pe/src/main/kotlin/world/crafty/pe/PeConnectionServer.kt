@@ -1,5 +1,6 @@
 package world.crafty.pe
 
+import com.fasterxml.jackson.databind.MapperFeature
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.datagram.DatagramSocket
@@ -7,6 +8,8 @@ import io.vertx.core.json.Json
 import io.vertx.core.net.SocketAddress
 import world.crafty.pe.proto.packets.mixed.EncryptionWrapperPePacket
 import world.crafty.proto.ConcurrentColumnsCache
+import world.crafty.proto.registerVertxCraftyCodecs
+import world.crafty.skinpool.protocol.registerVertxSkinPoolCodecs
 import java.security.KeyPairGenerator
 import java.security.spec.ECGenParameterSpec
 import java.util.concurrent.CompletableFuture
@@ -25,8 +28,11 @@ class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
     }()
 
     override fun start() {
+        val eb = vertx.eventBus()
         Json.mapper.registerKotlinModule()
-        Json.mapper.deserializationConfig
+        Json.mapper.configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
+        registerVertxCraftyCodecs(eb)
+        registerVertxSkinPoolCodecs(eb)
         
         socket = vertx.createDatagramSocket()
         socket.listen(port, "0.0.0.0") {

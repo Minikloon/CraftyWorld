@@ -6,10 +6,13 @@ import world.crafty.pc.PcConnectionServer
 import world.crafty.server.world.World
 import world.crafty.pe.PeConnectionServer
 import world.crafty.server.CraftyServer
+import world.crafty.skinpool.CraftySkinPoolServer
 import kotlin.system.measureTimeMillis
 
 fun main(args: Array<String>) {
     val vertx = Vertx.vertx()
+
+    vertx.deployVerticle(CraftySkinPoolServer.startFromConsole())
     
     val world = loadWorld()
     

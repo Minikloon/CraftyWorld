@@ -1,6 +1,9 @@
 package world.crafty.pe.jwt
 
 import io.vertx.core.json.Json
+import io.vertx.core.json.JsonObject
+import world.crafty.pe.jwt.payloads.CertChainLink
+import world.crafty.pe.jwt.payloads.PeClientData
 import world.crafty.pe.transcodeSignatureToDER
 import java.security.Signature
 import java.util.*
@@ -8,7 +11,7 @@ import java.util.*
 class PeJwt private constructor(
         val asString: String,
         val header: PeJwtHeader,
-        val payload: PeJwtPayload,
+        val payload: Any,
         val signature: ByteArray
 ) {
     val isSignatureValid by lazy {
@@ -29,14 +32,22 @@ class PeJwt private constructor(
     
     companion object {        
         fun parse(str: String) : PeJwt {
-            val base64toStr = { str: String -> Base64.getUrlDecoder().decode(str).toString(Charsets.UTF_8) }
             val parts = str.split(".")
+            
+            val payloadStr = base64ToStr(parts[1])
+            val payloadJson = JsonObject(payloadStr)
+            val payloadClass = if(payloadJson.containsKey("exp")) CertChainLink::class else PeClientData::class 
+            val payload = payloadJson.mapTo(payloadClass.java)
+            
             return PeJwt(
                     asString = str,
-                    header = Json.decodeValue(base64toStr(parts[0]), PeJwtHeader::class.java),
-                    payload = Json.decodeValue(base64toStr(parts[1]), PeJwtPayload::class.java),
+                    header = Json.decodeValue(base64ToStr(parts[0]), PeJwtHeader::class.java),
+                    payload = payload,
                     signature = Base64.getUrlDecoder().decode(parts[2])
             )
+        }
+        private fun base64ToStr(str: String) : String {
+            return Base64.getUrlDecoder().decode(str).toString(Charsets.UTF_8)
         }
     }
 }

@@ -34,7 +34,7 @@ class PlayerActionPePacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PePacketCodec() {
-        override val id = 0x24
+        override val id = 0x25
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PlayerActionPePacket) throw IllegalArgumentException()
             stream.writeUnsignedVarLong(obj.entityId)

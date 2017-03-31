@@ -3,14 +3,14 @@ package world.crafty.pc.proto.packets.server
 import world.crafty.common.serialization.McCodec
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
-import world.crafty.pc.mojang.ProfileProperty
+import world.crafty.mojang.ProfileProperty
 import world.crafty.pc.proto.McChat
 import world.crafty.pc.proto.PcPacket
 import java.util.*
 
 class PlayerListItemPcPacket(
         val action: Int,
-        val items: List<PlayerListItem>
+        val items: List<PlayerListPcItem>
 ) : PcPacket() {
     override val id = Codec.id
     override val codec = Codec
@@ -34,147 +34,152 @@ class PlayerListItemPcPacket(
         }
 
         val actionCodecs = listOf(
-                PlayerListItemAdd.Codec
+                PlayerListPcAdd.Codec,
+                PlayerListPcSetGamemode.Codec,
+                PlayerListPcSetLatency.Codec,
+                PlayerListPcSetDisplayName.Codec,
+                PlayerListPcRemove.Codec
         ).associateBy { it.action }
     }
+}
 
-    abstract class PlayerListItem(val uuid: UUID) {
-        abstract val action: Int
-        abstract val codec: McCodec<PlayerListItem>
-    }
-    
-    abstract class PlayerListItemCodec : McCodec<PlayerListItem> {
-        abstract val action: Int
-    }
-    
-    class PlayerListItemAdd(
-            uuid: UUID,
-            val name: String,
-            val properties: List<ProfileProperty>,
-            val gamemode: Int,
-            val ping: Int,
-            val displayName: McChat? = null
-    ) : PlayerListItem(uuid) {
-        override val action = Codec.action
-        override val codec = Codec
-        object Codec : PlayerListItemCodec() {
-            override val action = 0
-            override fun serialize(obj: PlayerListItem, stream: MinecraftOutputStream) {
-                if(obj !is PlayerListItemAdd) throw IllegalArgumentException()
-                stream.writeUuid(obj.uuid)
-                stream.writeSignedString(obj.name)
-                stream.writeSignedVarInt(obj.properties.size)
-                obj.properties.forEach {
-                    stream.writeSignedString(it.name)
-                    stream.writeSignedString(it.value)
-                    stream.writeBoolean(it.signature != null)
-                    if (it.signature != null)
-                        stream.writeSignedString(it.signature)
-                }
-                stream.writeSignedVarInt(obj.gamemode)
-                stream.writeSignedVarInt(obj.ping)
-                stream.writeBoolean(obj.displayName != null)
-                if (obj.displayName != null)
-                    stream.writeJson(obj.displayName)
+abstract class PlayerListPcItem(val uuid: UUID) {
+    abstract val action: Int
+    abstract val codec: McCodec<PlayerListPcItem>
+}
+
+abstract class PlayerListItemCodec : McCodec<PlayerListPcItem> {
+    abstract val action: Int
+}
+
+class PlayerListPcAdd(
+        uuid: UUID,
+        val name: String,
+        val properties: List<ProfileProperty>,
+        val gamemode: Int,
+        val ping: Int,
+        val displayName: McChat? = null
+) : PlayerListPcItem(uuid) {
+    override val action = Codec.action
+    override val codec = Codec
+    object Codec : PlayerListItemCodec() {
+        override val action = 0
+        override fun serialize(obj: PlayerListPcItem, stream: MinecraftOutputStream) {
+            if(obj !is PlayerListPcAdd) throw IllegalArgumentException()
+            stream.writeUuid(obj.uuid)
+            stream.writeSignedString(obj.name)
+            stream.writeSignedVarInt(obj.properties.size)
+            obj.properties.forEach {
+                stream.writeSignedString(it.name)
+                stream.writeSignedString(it.value)
+                stream.writeBoolean(it.signature != null)
+                val signature = it.signature
+                if (signature != null)
+                    stream.writeSignedString(signature)
             }
-            override fun deserialize(stream: MinecraftInputStream): PlayerListItem {
-                return PlayerListItemAdd(
-                        uuid = stream.readUuid(),
-                        name = stream.readSignedString(),
-                        properties = (0 until stream.readSignedVarInt()).map {
-                            ProfileProperty(
-                                    name = stream.readSignedString(),
-                                    value = stream.readSignedString(),
-                                    signature = if (stream.readBoolean()) stream.readSignedString() else null
-                            )
-                        },
-                        gamemode = stream.readSignedVarInt(),
-                        ping = stream.readSignedVarInt(),
-                        displayName = if (stream.readBoolean()) stream.readJson(McChat::class.java) else null
-                )
-            }
+            stream.writeSignedVarInt(obj.gamemode)
+            stream.writeSignedVarInt(obj.ping)
+            stream.writeBoolean(obj.displayName != null)
+            if (obj.displayName != null)
+                stream.writeJson(obj.displayName)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PlayerListPcItem {
+            return PlayerListPcAdd(
+                    uuid = stream.readUuid(),
+                    name = stream.readSignedString(),
+                    properties = (0 until stream.readSignedVarInt()).map {
+                        ProfileProperty(
+                                name = stream.readSignedString(),
+                                value = stream.readSignedString(),
+                                signature = if (stream.readBoolean()) stream.readSignedString() else null
+                        )
+                    },
+                    gamemode = stream.readSignedVarInt(),
+                    ping = stream.readSignedVarInt(),
+                    displayName = if (stream.readBoolean()) stream.readJson(McChat::class.java) else null
+            )
         }
     }
-    class PlayerListItemUpdateGamemode(
-            uuid: UUID,
-            val gamemode: Int
-    ) : PlayerListItem(uuid) {
-        override val action = PlayerListItemAdd.Codec.action
-        override val codec = PlayerListItemAdd.Codec
-        object Codec : PlayerListItemCodec() {
-            override val action = 1
-            override fun serialize(obj: PlayerListItem, stream: MinecraftOutputStream) {
-                if(obj !is PlayerListItemUpdateGamemode) throw IllegalArgumentException()
-                stream.writeUuid(obj.uuid)
-                stream.writeSignedVarInt(obj.gamemode)
-            }
-            override fun deserialize(stream: MinecraftInputStream): PlayerListItemUpdateGamemode {
-                return PlayerListItemUpdateGamemode(
-                        uuid = stream.readUuid(),
-                        gamemode = stream.readSignedVarInt()
-                )
-            }
+}
+class PlayerListPcSetGamemode(
+        uuid: UUID,
+        val gamemode: Int
+) : PlayerListPcItem(uuid) {
+    override val action = PlayerListPcAdd.Codec.action
+    override val codec = PlayerListPcAdd.Codec
+    object Codec : PlayerListItemCodec() {
+        override val action = 1
+        override fun serialize(obj: PlayerListPcItem, stream: MinecraftOutputStream) {
+            if(obj !is PlayerListPcSetGamemode) throw IllegalArgumentException()
+            stream.writeUuid(obj.uuid)
+            stream.writeSignedVarInt(obj.gamemode)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PlayerListPcSetGamemode {
+            return PlayerListPcSetGamemode(
+                    uuid = stream.readUuid(),
+                    gamemode = stream.readSignedVarInt()
+            )
         }
     }
-    class PlayerListItemUpdateLatency(
-            uuid: UUID,
-            val ping: Int
-    ) : PlayerListItem(uuid) {
-        override val action = PlayerListItemAdd.Codec.action
-        override val codec = PlayerListItemAdd.Codec
-        object Codec : PlayerListItemCodec() {
-            override val action = 2
-            override fun serialize(obj: PlayerListItem, stream: MinecraftOutputStream) {
-                if(obj !is PlayerListItemUpdateLatency) throw IllegalArgumentException()
-                stream.writeUuid(obj.uuid)
-                stream.writeSignedVarInt(obj.ping)
-            }
-            override fun deserialize(stream: MinecraftInputStream): PlayerListItemUpdateLatency {
-                return PlayerListItemUpdateLatency(
-                        uuid = stream.readUuid(),
-                        ping = stream.readSignedVarInt()
-                )
-            }
+}
+class PlayerListPcSetLatency(
+        uuid: UUID,
+        val ping: Int
+) : PlayerListPcItem(uuid) {
+    override val action = PlayerListPcAdd.Codec.action
+    override val codec = PlayerListPcAdd.Codec
+    object Codec : PlayerListItemCodec() {
+        override val action = 2
+        override fun serialize(obj: PlayerListPcItem, stream: MinecraftOutputStream) {
+            if(obj !is PlayerListPcSetLatency) throw IllegalArgumentException()
+            stream.writeUuid(obj.uuid)
+            stream.writeSignedVarInt(obj.ping)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PlayerListPcSetLatency {
+            return PlayerListPcSetLatency(
+                    uuid = stream.readUuid(),
+                    ping = stream.readSignedVarInt()
+            )
         }
     }
-    class PlayerListItemUpdateDisplayName(
-            uuid: UUID,
-            val displayName: String?
-    ) : PlayerListItem(uuid) {
-        override val action = PlayerListItemAdd.Codec.action
-        override val codec = PlayerListItemAdd.Codec
-        object Codec : PlayerListItemCodec() {
-            override val action = 3
-            override fun serialize(obj: PlayerListItem, stream: MinecraftOutputStream) {
-                if(obj !is PlayerListItemUpdateDisplayName) throw IllegalArgumentException()
-                stream.writeUuid(obj.uuid)
-                if(obj.displayName != null)
-                    stream.writeSignedString(obj.displayName)
-            }
-            override fun deserialize(stream: MinecraftInputStream): PlayerListItemUpdateDisplayName {
-                return PlayerListItemUpdateDisplayName(
-                        uuid = stream.readUuid(),
-                        displayName = if(stream.readBoolean()) stream.readSignedString() else null
-                )
-            }
+}
+class PlayerListPcSetDisplayName(
+        uuid: UUID,
+        val displayName: String?
+) : PlayerListPcItem(uuid) {
+    override val action = PlayerListPcAdd.Codec.action
+    override val codec = PlayerListPcAdd.Codec
+    object Codec : PlayerListItemCodec() {
+        override val action = 3
+        override fun serialize(obj: PlayerListPcItem, stream: MinecraftOutputStream) {
+            if(obj !is PlayerListPcSetDisplayName) throw IllegalArgumentException()
+            stream.writeUuid(obj.uuid)
+            if(obj.displayName != null)
+                stream.writeSignedString(obj.displayName)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PlayerListPcSetDisplayName {
+            return PlayerListPcSetDisplayName(
+                    uuid = stream.readUuid(),
+                    displayName = if(stream.readBoolean()) stream.readSignedString() else null
+            )
         }
     }
-    class PlayerListItemRemovePlayer(
-            uuid: UUID
-    ) : PlayerListItem(uuid) {
-        override val action = PlayerListItemAdd.Codec.action
-        override val codec = PlayerListItemAdd.Codec
-        object Codec : PlayerListItemCodec() {
-            override val action = 4
-            override fun serialize(obj: PlayerListItem, stream: MinecraftOutputStream) {
-                if(obj !is PlayerListItemRemovePlayer) throw IllegalArgumentException()
-                stream.writeUuid(obj.uuid)
-            }
-            override fun deserialize(stream: MinecraftInputStream): PlayerListItemRemovePlayer {
-                return PlayerListItemRemovePlayer(
-                        uuid = stream.readUuid()
-                )
-            }
+}
+class PlayerListPcRemove(
+        uuid: UUID
+) : PlayerListPcItem(uuid) {
+    override val action = PlayerListPcAdd.Codec.action
+    override val codec = PlayerListPcAdd.Codec
+    object Codec : PlayerListItemCodec() {
+        override val action = 4
+        override fun serialize(obj: PlayerListPcItem, stream: MinecraftOutputStream) {
+            if(obj !is PlayerListPcRemove) throw IllegalArgumentException()
+            stream.writeUuid(obj.uuid)
+        }
+        override fun deserialize(stream: MinecraftInputStream): PlayerListPcRemove {
+            return PlayerListPcRemove(
+                    uuid = stream.readUuid()
+            )
         }
     }
 }

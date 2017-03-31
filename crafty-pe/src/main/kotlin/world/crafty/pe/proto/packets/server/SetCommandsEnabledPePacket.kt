@@ -10,7 +10,7 @@ class SetCommandsEnabledPePacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PePacketCodec() {
-        override val id = 0x3b
+        override val id = 0x3c
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetCommandsEnabledPePacket) throw IllegalArgumentException()
             stream.writeBoolean(obj.enabled)

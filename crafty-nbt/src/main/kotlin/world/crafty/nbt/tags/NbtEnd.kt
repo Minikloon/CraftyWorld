@@ -1,6 +1,7 @@
 package world.crafty.nbt.tags
 
 import world.crafty.nbt.NbtInputStream
+import java.io.DataOutput
 import java.io.DataOutputStream
 
 class NbtEnd : NbtTag(null) {
@@ -18,7 +19,7 @@ class NbtEnd : NbtTag(null) {
     object Codec : NbtTagCodec() {
         override val id = 0
 
-        override fun serialize(obj: Any, stream: DataOutputStream) {
+        override fun serialize(obj: Any, stream: DataOutput) {
         }
         override fun deserialize(stream: NbtInputStream): NbtTag {
             return deserialize(null, stream)

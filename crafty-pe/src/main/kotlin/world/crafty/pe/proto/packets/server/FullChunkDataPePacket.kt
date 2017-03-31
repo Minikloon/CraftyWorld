@@ -12,7 +12,7 @@ class FullChunkDataPePacket(
     override val codec = Codec
     override val expectedSize = column.expectedSize + 12
     object Codec : PePacketCodec() {
-        override val id = 0x3a
+        override val id = 0x3b
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is FullChunkDataPePacket) throw IllegalArgumentException()
             val column = obj.column

@@ -4,10 +4,12 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.core.net.NetServer
 import io.vertx.core.net.NetSocket
 import world.crafty.common.serialization.MinecraftOutputStream
+import world.crafty.mojang.MojangClient
 import world.crafty.pc.proto.packets.server.ServerKeepAlivePcPacket
-import world.crafty.pc.mojang.MojangClient
 import world.crafty.pc.proto.PrecompressedPayload
 import world.crafty.proto.ConcurrentColumnsCache
+import world.crafty.proto.registerVertxCraftyCodecs
+import world.crafty.skinpool.protocol.registerVertxSkinPoolCodecs
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 
@@ -33,6 +35,10 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
     }
 
     override fun start() {
+        val eb = vertx.eventBus()
+        registerVertxCraftyCodecs(eb)
+        registerVertxSkinPoolCodecs(eb)
+        
         mojang = MojangClient(vertx)
 
         server = vertx.createNetServer()

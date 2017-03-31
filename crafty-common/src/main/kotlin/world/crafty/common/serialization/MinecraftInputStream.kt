@@ -9,6 +9,7 @@ import org.joml.Vector3i
 import org.joml.Vector3ic
 import world.crafty.common.Angle256
 import world.crafty.common.Location
+import world.crafty.common.vertx.BufferInputStream
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
 import java.io.IOException
@@ -99,8 +100,8 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
     }
     
     fun readRemainingBytes() : ByteArray {
-        if(`in` !is ByteArrayInputStream) 
-            throw NotImplementedError("readRemainingBytes only available for ByteArrayInputStream")
+        if(`in` !is ByteArrayInputStream && `in` !is BufferInputStream) 
+            throw NotImplementedError("readRemainingBytes only available for ByteArrayInputStream or BufferInputStream")
         return readByteArray(available())
     }
 

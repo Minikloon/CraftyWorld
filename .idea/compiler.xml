@@ -8,6 +8,8 @@
       <module name="crafty-bootstrap_test" target="1.8" />
       <module name="crafty-common_main" target="1.8" />
       <module name="crafty-common_test" target="1.8" />
+      <module name="crafty-mojang_main" target="1.8" />
+      <module name="crafty-mojang_test" target="1.8" />
       <module name="crafty-nbt_main" target="1.8" />
       <module name="crafty-nbt_test" target="1.8" />
       <module name="crafty-pc_main" target="1.8" />
@@ -18,6 +20,8 @@
       <module name="crafty-proto_test" target="1.8" />
       <module name="crafty-server_main" target="1.8" />
       <module name="crafty-server_test" target="1.8" />
+      <module name="crafty-skinpool_main" target="1.8" />
+      <module name="crafty-skinpool_test" target="1.8" />
     </bytecodeTargetLevel>
   </component>
 </project>
