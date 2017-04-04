@@ -6,12 +6,10 @@ import world.crafty.nbt.tags.NbtTagType
 import java.io.*
 
 class NbtInputStream(stream: DataInput) : DataInput by stream {
-    constructor(bytes: ByteArray, littleEndian: Boolean) : this(
-            if(littleEndian)
-                LittleEndianDataInputStream(ByteArrayInputStream(bytes))
-            else
-                DataInputStream(ByteArrayInputStream(bytes))
-    )
+    constructor(bytes: ByteArray, littleEndian: Boolean)
+            : this(pickInputStream(bytes, littleEndian))
+
+    constructor(stream: InputStream) : this(DataInputStream(stream) as DataInput)
 
     fun readTag() : NbtTag? {
         val id = try {
@@ -23,5 +21,15 @@ class NbtInputStream(stream: DataInput) : DataInput by stream {
         val tagFactory = requireNotNull(NbtTagType.idToCodec[id]) { "Unknown id $id while reading nbt" }
 
         return tagFactory.deserialize(this)
+    }
+
+    companion object {
+        private fun pickInputStream(bytes: ByteArray, littleEndian: Boolean) : DataInput {
+            val bs = ByteArrayInputStream(bytes)
+            return if(littleEndian)
+                LittleEndianDataInputStream(bs)
+            else
+                DataInputStream(bs)
+        }
     }
 }

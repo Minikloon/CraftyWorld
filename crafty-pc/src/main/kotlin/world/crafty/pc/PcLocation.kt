@@ -27,6 +27,14 @@ fun MinecraftOutputStream.writePcLocation(loc: PcLocation) {
     writeAngle(loc.pitch)
 }
 
+fun MinecraftOutputStream.writePcLocation(loc: Location) {
+    writeDouble(loc.x.toDouble())
+    writeDouble(loc.y.toDouble())
+    writeDouble(loc.z.toDouble())
+    writeAngle(loc.yaw)
+    writeAngle(loc.pitch)
+}
+
 fun MinecraftInputStream.readPcLocation() : PcLocation {
     return PcLocation(
             x = readDouble(),

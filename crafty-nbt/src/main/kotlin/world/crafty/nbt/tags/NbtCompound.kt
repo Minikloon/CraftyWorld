@@ -1,10 +1,9 @@
 package world.crafty.nbt.tags
 
+import world.crafty.common.serialization.LittleEndianDataInputStream
 import world.crafty.common.serialization.LittleEndianDataOutputStream
 import world.crafty.nbt.NbtInputStream
-import java.io.ByteArrayOutputStream
-import java.io.DataOutput
-import java.io.DataOutputStream
+import java.io.*
 import java.util.*
 
 class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(name), Iterable<NbtTag> {
@@ -81,13 +80,6 @@ class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(
         }
         sb.append('}')
     }
-    
-    fun toBytes(littleEndian: Boolean = false) : ByteArray {
-        val bs = ByteArrayOutputStream()
-        val os: DataOutput = if(littleEndian) LittleEndianDataOutputStream(bs) else DataOutputStream(bs)
-        Codec.serialize(this, os)
-        return bs.toByteArray()
-    }
 
     object Codec : NbtTagCodec() {
         override val id = 10
@@ -105,6 +97,20 @@ class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(
                 children.add(child)
             }
             return NbtCompound(name, children)
+        }
+    }
+
+    fun toBytes(littleEndian: Boolean = false) : ByteArray {
+        val bs = ByteArrayOutputStream()
+        val os: DataOutput = if(littleEndian) LittleEndianDataOutputStream(bs) else DataOutputStream(bs)
+        Codec.serialize(this, os)
+        return bs.toByteArray()
+    }
+
+    companion object {
+        fun deserialize(stream: InputStream, littleEndian: Boolean = false) : NbtCompound {
+            val os: DataInput = if(littleEndian) LittleEndianDataInputStream(stream) else DataInputStream(stream)
+            return Codec.deserialize(NbtInputStream(os)) as NbtCompound
         }
     }
 }

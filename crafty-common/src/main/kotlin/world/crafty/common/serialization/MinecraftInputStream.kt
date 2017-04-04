@@ -143,6 +143,14 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         return SocketAddressImpl(port, host)
     }
     
+    fun readVector2f() : Vector2f {
+        return Vector2f(readFloat(), readFloat())
+    }
+    
+    fun readVector3f() : Vector3f {
+        return Vector3f(readFloat(), readFloat(), readFloat())
+    }
+    
     fun readFloatLe() : Float {
         return java.lang.Float.intBitsToFloat(readIntLe())
     }

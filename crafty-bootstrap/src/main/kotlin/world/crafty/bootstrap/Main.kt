@@ -12,23 +12,38 @@ import kotlin.system.measureTimeMillis
 fun main(args: Array<String>) {
     val vertx = Vertx.vertx()
 
-    vertx.deployVerticle(CraftySkinPoolServer.startFromConsole())
-    
-    val world = loadWorld()
-    
+    val skinPool = try {
+        CraftySkinPoolServer.startFromConsole()
+    } catch(e: Exception) {
+        e.printStackTrace()
+        System.exit(1)
+        return
+    }
+
+    vertx.deployVerticle(skinPool)
+
+    val world = try {
+        val directory = "neus"
+        timedLoadWorld(directory)
+    } catch(e: Exception) {
+        e.printStackTrace()
+        System.exit(1)
+        return
+    }
+
     val craftyServer = CraftyServer("worldServer:test", world)
     vertx.deployVerticle(craftyServer)
 
     startPc(vertx, craftyServer)
-    
+
     startPe(vertx, craftyServer)
 
     println("All bootstrapped!")
 }
 
-fun loadWorld() : World {
+fun timedLoadWorld(directory: String) : World {
     val before = System.currentTimeMillis()
-    val world = loadWorld("C:/Development/Minecraft/Crafty/neus")
+    val world = loadWorld(directory)
     val elapsed = System.currentTimeMillis() - before
     println("World loaded in $elapsed ms")
     return world

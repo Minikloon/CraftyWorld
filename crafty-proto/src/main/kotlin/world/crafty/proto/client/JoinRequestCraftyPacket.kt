@@ -5,6 +5,7 @@ import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.proto.CraftyPacket
 import world.crafty.proto.CraftySkin
+import java.util.*
 
 class JoinRequestCraftyPacket(
         val username: String,

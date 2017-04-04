@@ -8,6 +8,7 @@ import io.vertx.core.net.NetSocket
 import io.vertx.ext.web.client.WebClient
 import kotlinx.coroutines.experimental.Deferred
 import kotlinx.coroutines.experimental.async
+import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.joml.Vector3i
 import world.crafty.common.serialization.MinecraftInputStream
@@ -22,6 +23,9 @@ import world.crafty.common.utils.CompressionAlgorithm
 import world.crafty.common.utils.decompressed
 import world.crafty.common.utils.hashFnv1a64
 import world.crafty.common.vertx.*
+import world.crafty.mojang.MojangProfile
+import world.crafty.pc.metadata.MetaEntity
+import world.crafty.pc.metadata.PcMetadataMap
 import world.crafty.pc.metadata.PlayerMetadata
 import world.crafty.proto.client.JoinRequestCraftyPacket
 import java.io.ByteArrayInputStream
@@ -64,6 +68,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     private lateinit var decipher : Cipher
 
     private lateinit var username : String
+    private lateinit var profile: MojangProfile
     private lateinit var brand : String
     
     private val eb = server.vertx.eventBus()
@@ -202,7 +207,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 compressing = true
 
                 val serverId = server.mojang.getServerIdHash(sessionId, sharedSecret, server.x509PubKey)
-                val profile = server.mojang.checkHasJoinedAsync(username, serverId)
+                profile = server.mojang.checkHasJoinedAsync(username, serverId)
                 
                 val textureProp = profile.properties.first { it.name == "textures" } // TODO: cache pc skins in pool for faster login
                 val texturePropValue = Base64.getDecoder().decode(textureProp.value)
@@ -242,7 +247,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 val prespawn = craftyResponse.prespawn!!
                 location = prespawn.spawnLocation
                 send(JoinGamePcPacket(
-                        eid = prespawn.entityId,
+                        eid = prespawn.entityId.toInt(),
                         gamemode = prespawn.gamemode,
                         dimension = prespawn.dimension,
                         difficulty = 0,
@@ -262,117 +267,73 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                         }
                         send(chunkPacket)
                     }
-
-                    eb.typedConsumer("p:c:$craftyPlayerId", UpdatePlayerListCraftyPacket::class) {
+                    
+                    eb.typedConsumer("p:c:$craftyPlayerId", AddPlayerCraftyPacket::class) {
+                        val packet = it.body()
+                        
                         launch(CurrentVertx) {
-                            handleUpdatePlayerList(it)
+                            val skinReq = HashPollPoolPacket(packet.skin.fnvHashOfPng, needProfile = true)
+                            val skinProfile = eb.typedSendAsync<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, skinReq).body()
+                            val playerProps = if(skinProfile.textureProp == null) emptyList() else listOf(skinProfile.textureProp!!)
+
+                            if(packet.entityId == craftyPlayerId.toLong()) // TODO: fix hack
+                                return@launch
+                            
+                            send(PlayerListItemPcPacket(
+                                    action = PlayerListAction.ADD,
+                                    items = listOf(
+                                            PlayerListPcAdd(
+                                                    uuid = packet.uuid,
+                                                    name = packet.username,
+                                                    properties = playerProps,
+                                                    gamemode = 0,
+                                                    ping = 30,
+                                                    displayName = null
+                                            )
+                                    )
+                            ))
+                            println("spawn ${packet.uuid} ${packet.username} ${skinProfile.hash}")
+                            send(AddPlayerPcPacket(
+                                    entityId = packet.entityId.toInt(),
+                                    uuid = packet.uuid,
+                                    location = PcLocation(packet.location),
+                                    metadata = PcMetadataMap() // TODO: Sync metadata
+                            ))
+                            delay(100)
+                            send(PlayerListItemPcPacket(PlayerListAction.REMOVE, listOf(PlayerListPcRemove(packet.uuid))))
                         }
                     }
 
                     eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {
-                        send(SetSpawnPositionPcPacket(Vector3i(location.x.toInt(), location.y.toInt(), location.z.toInt())))
-                        send(TeleportPlayerPcPacket(PcLocation(location), 0, 1))
+                        launch(CurrentVertx) {
+                            send(PlayerListItemPcPacket(
+                                    action = PlayerListAction.ADD,
+                                    items = listOf(
+                                            PlayerListPcAdd(
+                                                    uuid = profile.uuid,
+                                                    name = profile.name,
+                                                    properties = profile.properties,
+                                                    gamemode = 0,
+                                                    ping = 30,
+                                                    displayName = null
+                                            )
+                                    )
+                            ))
+                            send(TeleportPlayerPcPacket(PcLocation(location), 0, 1))
+                            delay(100)
+                            send(PlayerListItemPcPacket(
+                                    action = PlayerListAction.REMOVE,
+                                    items = listOf(PlayerListPcRemove(profile.uuid))
+                            ))
+                        }
                     }
                     
                     eb.typedSend("p:s:$craftyPlayerId", ReadyToSpawnCraftyPacket())
-
-                    val playerMetadata = PlayerMetadata(
-                            status = 0,
-                            air = 0,
-                            name = "",
-                            nameVisible = false,
-                            silent = false,
-                            gravity = true,
-                            handStatus = 0b01,
-                            health = 20f,
-                            potionEffectColor = 0,
-                            potionEffectAmbient = false,
-                            insertedArrows = 3,
-                            extraHearts = 0,
-                            score = 0,
-                            mainHand = 0,
-                            skinParts = 0b1111111
-                    )
-
-                    /*
-                server.sessions.values.forEach {
-                    it.send(PlayerListItemPcPacket(0, listOf(
-                            PlayerListItemPcPacket.PlayerListPcAdd(
-                                    uuid = profile.uuid,
-                                    name = profile.name,
-                                    properties = profile.properties,
-                                    gamemode = 1,
-                                    ping = 30
-                            )
-                    )))
-                    if(it != this) {
-                        it.send(SpawnPlayerPcPacket(
-                                4,
-                                profile.uuid,
-                                PcLocation(spawnPos),
-                                playerMetadata)
-                        )
-                    }
-                }
-                */
                 }
             }
             else -> {
                 println("Unhandled Login packet ${packet.javaClass.simpleName}")
             }
-        }
-    }
-    
-    suspend private fun handleUpdatePlayerList(message: Message<UpdatePlayerListCraftyPacket>) { // TODO: move this out of the session
-        val byItemType = message.body().items.groupBy { it.type }
-        byItemType.forEach {
-            val itemType = it.key
-            val craftyItems = it.value
-            
-            val action: Int
-            val pcItems = mutableListOf<PlayerListPcItem>()
-            
-            when(itemType) {
-                PlayerListItemType.ADD -> {
-                    action = PlayerListPcAdd.Codec.action
-                    
-                    class getUuidProfile(val craftyItem: PlayerListAdd, val getProfile: Deferred<Message<HashPollReplyPoolPacket>>)
-                    craftyItems.map {
-                        val add = it as PlayerListAdd
-                        val req = HashPollPoolPacket(add.skin.fnvHashOfPng, true)
-                        val getProfile = async(CurrentVertx) {
-                            eb.typedSendAsync<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, req)
-                        }
-                        getUuidProfile(add, getProfile)
-                    }.forEach {
-                        val craftyItem = it.craftyItem
-                        val textureProp = it.getProfile.await().body().textureProp
-                        val playerProps = if(textureProp == null) emptyList() else listOf(textureProp)
-                        println("pc add to player list ${craftyItem.uuid} ${craftyItem.name}")
-                        pcItems.add(PlayerListPcAdd(
-                                uuid = craftyItem.uuid,
-                                name = craftyItem.name,
-                                properties = playerProps,
-                                gamemode = 0,
-                                ping = 50,
-                                displayName = null
-                        ))
-                    }                    
-                }
-                PlayerListItemType.REMOVE -> {
-                    action = PlayerListPcRemove.Codec.action
-                    pcItems.addAll(craftyItems.map {
-                        PlayerListPcRemove(
-                                uuid = it.uuid
-                        )
-                    })
-                }
-            }
-            
-            send(PlayerListItemPcPacket(
-                    action = action,
-                    items = pcItems
-            ))
         }
     }
 

@@ -114,6 +114,17 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         writeShort(address.port())
     }
     
+    fun writeVector2f(vector: Vector2fc) {
+        writeFloat(vector.x())
+        writeFloat(vector.y())
+    }
+    
+    fun writeVector3f(vector: Vector3fc) {
+        writeFloat(vector.x())
+        writeFloat(vector.y())
+        writeFloat(vector.z())
+    }
+    
     fun writeFloatLe(value: Float) {
         writeIntLe(java.lang.Float.floatToIntBits(value))
     }
@@ -140,20 +151,6 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         writeAngle(loc.pitch)
         writeAngle(loc.yaw)
     }
-
-    /*
-    fun writePacket(packet: PcPacket, compressed: Boolean = false) {
-        val contentStream = ByteArrayOutputStream()
-        val contentMcStream = MinecraftOutputStream(contentStream)
-        packet.serialize(contentMcStream)
-        val contentBytes = contentStream.toByteArray()
-
-        writeUnsignedVarInt(contentBytes.size + 1 + (if(compressed) 1 else 0))
-        if(compressed) writeUnsignedVarInt(0)
-        writeUnsignedVarInt(packet.id)
-        write(contentBytes)
-    }
-    */
 
     companion object {        
         fun varIntSize(value: Int) : Int {

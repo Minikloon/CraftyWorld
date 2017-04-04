@@ -7,8 +7,10 @@ import world.crafty.pe.proto.PePacket
 import world.crafty.pe.proto.PeSkin
 import java.util.*
 
+enum class PlayerListAction { ADD, REMOVE }
+
 class PlayerListItemPePacket(
-        val action: Int,
+        val action: PlayerListAction,
         val items: List<PlayerListPeItem>
 ) : PePacket() {
     override val id = Codec.id
@@ -17,14 +19,14 @@ class PlayerListItemPePacket(
         override val id = 0x40
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PlayerListItemPePacket) throw IllegalArgumentException()
-            stream.writeByte(obj.action)
+            stream.writeByte(obj.action.ordinal)
             stream.writeUnsignedVarInt(obj.items.size)
             obj.items.forEach {
                 it.codec.serialize(it, stream)
             }
         }
         override fun deserialize(stream: MinecraftInputStream): PePacket {
-            val action = stream.readSignedVarInt()
+            val action = PlayerListAction.values()[stream.readSignedVarInt()]
             val actionCodec = actionCodecs[action] ?: throw IllegalStateException("Unknown player list action id $action")
             val items = (0 until stream.readUnsignedVarInt()).map { 
                 actionCodec.deserialize(stream)
@@ -40,12 +42,12 @@ class PlayerListItemPePacket(
 }
 
 abstract class PlayerListPeItem(val uuid: UUID) {
-    abstract val action: Int
+    abstract val action: PlayerListAction
     abstract val codec: McCodec<PlayerListPeItem>
 }
 
 abstract class PlayerListItemCodec : McCodec<PlayerListPeItem> {
-    abstract val action: Int
+    abstract val action: PlayerListAction
 }
 
 class PlayerListPeAdd(
@@ -57,10 +59,11 @@ class PlayerListPeAdd(
     override val action = Codec.action
     override val codec = Codec
     object Codec : PlayerListItemCodec() {
-        override val action = 0
+        override val action = PlayerListAction.ADD
         override fun serialize(obj: PlayerListPeItem, stream: MinecraftOutputStream) {
             if(obj !is PlayerListPeAdd) throw IllegalArgumentException()
-            stream.writeSignedVarLong(obj.entityId)
+            stream.writeUuid(obj.uuid)
+            stream.writeZigzagVarLong(obj.entityId)
             stream.writeUnsignedString(obj.name)
             PeSkin.Codec.serialize(obj.skin, stream)
         }
@@ -81,9 +84,10 @@ class PlayerListPeRemove(
     override val action = Codec.action
     override val codec = Codec
     object Codec : PlayerListItemCodec() {
-        override val action = 1
+        override val action = PlayerListAction.REMOVE
         override fun serialize(obj: PlayerListPeItem, stream: MinecraftOutputStream) {
             if(obj !is PlayerListPeRemove) throw IllegalArgumentException()
+            stream.writeUuid(obj.uuid)
         }
         override fun deserialize(stream: MinecraftInputStream): PlayerListPeItem {
             return PlayerListPeRemove(

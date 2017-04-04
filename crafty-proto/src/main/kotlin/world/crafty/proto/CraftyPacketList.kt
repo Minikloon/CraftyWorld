@@ -26,6 +26,7 @@ fun registerVertxCraftyCodecs(eb: EventBus) {
     eb.registerDefaultCodec<ReadyToSpawnCraftyPacket>(ReadyToSpawnCraftyPacket.Codec)
     eb.registerDefaultCodec<UpdatePlayerListCraftyPacket>(UpdatePlayerListCraftyPacket.Codec)
     eb.registerDefaultCodec<SpawnSelfCraftyPacket>(SpawnSelfCraftyPacket.Codec)
+    eb.registerDefaultCodec<AddPlayerCraftyPacket>(AddPlayerCraftyPacket.Codec)
 }
 
 private inline fun <reified T : CraftyPacket> EventBus.registerDefaultCodec(codec: CraftyPacket.CraftyPacketCodec) {

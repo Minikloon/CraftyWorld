@@ -23,12 +23,12 @@ class CraftyServer(val address: String, val world: World) : AbstractVerticle() {
         eb.consumer<JoinRequestCraftyPacket>("$address:join") {
             val request = it.body()
             val playerId = ++playerIdCounter
-            val player = CraftyPlayer(this, playerId, request.username, request.authMojang, request.authXbox, request.platform, request.skin)
+            val player = CraftyPlayer(this, playerId, request.username, request.authMojang, request.authXbox, request.platform, request.skin, world.spawn)
             playersById[playerId] = player
             player.setupConsumers(eb)
             println("(Crafty) ${it.body().username} joined, id $playerId!")
             it.reply(JoinResponseCraftyPacket(playerId, PreSpawnCraftyPacket(
-                    entityId = player.id,
+                    entityId = player.entityId,
                     spawnLocation = world.spawn,
                     dimension = 0,
                     gamemode = GameMode.CREATIVE

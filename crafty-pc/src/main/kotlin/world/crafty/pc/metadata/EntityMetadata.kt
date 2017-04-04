@@ -16,7 +16,7 @@ open class EntityMetadata(
         writeEntry(stream, 0xFF, null)
     }
 
-    open fun writeEntriesToStream(stream: MinecraftOutputStream) {
+    protected open fun writeEntriesToStream(stream: MinecraftOutputStream) {
         writeEntry(stream, 0, status)
         writeEntry(stream, 1, air)
         writeEntry(stream, 2, name)
@@ -59,6 +59,9 @@ open class EntityMetadata(
             // TODO: Direction
             // TODO: OptUUID
             // TODO: OptBlocKID
+            else -> {
+                throw IllegalArgumentException("Unsupported metadata entry type ${value?.javaClass?.name}")
+            }
         }
     }
 }

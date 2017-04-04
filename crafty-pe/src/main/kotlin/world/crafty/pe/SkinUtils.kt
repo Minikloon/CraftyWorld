@@ -44,6 +44,6 @@ private fun argbIntToRgba(ints: IntArray) : ByteArray {
                 if(mod == 3) 24 
                 else (2 - mod) * 8
         
-        ((int shl shiftBits) and 0xFF).toByte()
+        ((int shr shiftBits) and 0xFF).toByte()
     }
 }

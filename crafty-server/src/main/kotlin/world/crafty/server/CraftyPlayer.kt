@@ -1,6 +1,7 @@
 package world.crafty.server
 
 import io.vertx.core.eventbus.EventBus
+import world.crafty.common.Location
 import world.crafty.common.vertx.typedConsumer
 import world.crafty.common.vertx.typedSend
 import world.crafty.proto.CraftySkin
@@ -16,9 +17,11 @@ class CraftyPlayer(
         val authMojang: Boolean,
         val authXbox: Boolean,
         val platform: MinecraftPlatform,
-        val skin: CraftySkin
+        val skin: CraftySkin,
+        var location: Location
 ) {
     val uuid: UUID = UUID.randomUUID()
+    val entityId = id.toLong()
     
     fun setupConsumers(eb: EventBus) {
         eb.consumer<ChatFromClientCraftyPacket>("p:s:$id:chat") {
@@ -43,33 +46,26 @@ class CraftyPlayer(
         }
         
         eb.typedConsumer("p:s:$id", ReadyToSpawnCraftyPacket::class) {
-            val everyoneOnline = UpdatePlayerListCraftyPacket(
-                    items = server.players.map { player ->
-                        PlayerListAdd(
-                                uuid = player.uuid,
-                                entityId = player.id.toLong(),
-                                name = player.username,
-                                ping = 30,
-                                skin = player.skin
-                        )
-                    }
+            server.players.forEach { 
+                val playerAlreadyThere = AddPlayerCraftyPacket(
+                        uuid = it.uuid,
+                        username = it.username,
+                        entityId = it.entityId,
+                        location = it.location,
+                        skin = it.skin
+                )
+                eb.typedSend("p:c:$id", playerAlreadyThere)
+            }
+            
+            val newPlayer = AddPlayerCraftyPacket(
+                    uuid = uuid,
+                    username = username,
+                    entityId = entityId,
+                    location = location,
+                    skin = skin
             )
-            
-            eb.typedSend("p:c:$id", everyoneOnline)
-            
-            val plusNewPlayer = UpdatePlayerListCraftyPacket(
-                    items = listOf(
-                            PlayerListAdd(
-                                    uuid = uuid,
-                                    entityId = id.toLong(),
-                                    name = username,
-                                    ping = 30,
-                                    skin = skin
-                            )
-                    )
-            )
-            
-            server.typedSendAllExcept(this, plusNewPlayer)
+
+            server.typedSendAllExcept(this, newPlayer)
             
             eb.typedSend("p:c:$id", SpawnSelfCraftyPacket())
             println("Crafty spawning player $username!")

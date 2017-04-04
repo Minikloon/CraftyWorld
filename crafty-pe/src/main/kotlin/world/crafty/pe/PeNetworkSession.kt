@@ -10,14 +10,13 @@ import io.vertx.core.net.impl.SocketAddressImpl
 import kotlinx.coroutines.experimental.launch
 import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
+import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.utils.hashFnv1a64
 import world.crafty.common.vertx.*
 import world.crafty.pe.jwt.payloads.CertChainLink
 import world.crafty.pe.jwt.payloads.PeClientData
-import world.crafty.pe.proto.PePacket
-import world.crafty.pe.proto.PeSkin
-import world.crafty.pe.proto.ServerBoundPeTopLevelPackets
-import world.crafty.pe.proto.ServerListPongExtraData
+import world.crafty.pe.metadata.PeMetadataMap
+import world.crafty.pe.proto.*
 import world.crafty.pe.proto.packets.client.*
 import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
@@ -218,7 +217,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     val prespawn = craftyResponse.prespawn!!
                     location = prespawn.spawnLocation
                     queueSend(StartGamePePacket(
-                            entityId = prespawn.entityId.toLong(),
+                            entityId = prespawn.entityId,
                             runtimeEntityId = 0,
                             spawn = PeLocation(prespawn.spawnLocation),
                             seed = 12345,
@@ -268,18 +267,19 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 val chunkRadius = message.desiredChunkRadius
                 queueSend(SetChunkRadiusPePacket(chunkRadius))
                 
+                /*
                 eb.typedConsumer("p:c:$craftyPlayerId", UpdatePlayerListCraftyPacket::class) {
                     val byItemType = it.body().items.groupBy { it.type }
                     byItemType.forEach {
                         val itemType = it.key
                         val craftyItems = it.value
 
-                        val action: Int
+                        val action: PlayerListAction
                         val peItems = mutableListOf<PlayerListPeItem>()
 
                         when(itemType) {
                             PlayerListItemType.ADD -> {
-                                action = PlayerListPeAdd.Codec.action
+                                action = PlayerListAction.ADD
                                 peItems.addAll(craftyItems.map {
                                     val add = it as PlayerListAdd
                                     PlayerListPeAdd(
@@ -291,7 +291,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                                 })
                             }
                             PlayerListItemType.REMOVE -> {
-                                action = PlayerListPeRemove.Codec.action
+                                action = PlayerListAction.REMOVE
                                 peItems.addAll(craftyItems.map { 
                                     PlayerListPeRemove(
                                             uuid = it.uuid
@@ -300,11 +300,53 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                             }
                         }
                         
+                        peItems.removeIf { 
+                            it is PlayerListPeAdd && it.entityId == craftyPlayerId.toLong() // TODO: hack
+                        }
+                        
                         queueSend(PlayerListItemPePacket(
                                 action = action,
                                 items = peItems
                         ))
                     }
+                }
+                */
+
+                eb.typedConsumer("p:c:$craftyPlayerId", AddPlayerCraftyPacket::class) {
+                    val packet = it.body()
+                    
+                    if(packet.entityId == craftyPlayerId.toLong())// TODO: fix hack
+                        return@typedConsumer
+                    
+                    queueSend(PlayerListItemPePacket(
+                            action = PlayerListAction.ADD,
+                            items = listOf(
+                                    PlayerListPeAdd(
+                                            uuid = packet.uuid,
+                                            entityId = packet.entityId,
+                                            name = packet.username,
+                                            skin = PeSkin.fromCrafty(packet.skin)
+                                    )
+                            )
+                    ))
+                    queueSend(AddPlayerPePacket(
+                            uuid = packet.uuid,
+                            username = packet.username,
+                            entityId = packet.entityId,
+                            runtimeEntityId = packet.entityId,
+                            x = packet.location.x,
+                            y = packet.location.y,
+                            z = packet.location.z,
+                            speedX = 0f,
+                            speedY = 0f,
+                            speedZ = 0f,
+                            headPitch = packet.location.pitch.toDegrees(),
+                            headYaw = packet.location.yaw.toDegrees(),
+                            bodyYaw = packet.location.yaw.toDegrees(),
+                            itemInHand = PeItem(0, 0, 0, null),
+                            metadata = PeMetadataMap()
+                    ))
+                    queueSend(PlayerListItemPePacket(PlayerListAction.REMOVE, listOf(PlayerListPeRemove(packet.uuid))))
                 }
                 
                 eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {

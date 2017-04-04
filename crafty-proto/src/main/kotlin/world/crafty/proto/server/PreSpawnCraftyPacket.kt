@@ -7,7 +7,7 @@ import world.crafty.proto.CraftyPacket
 import world.crafty.proto.GameMode
 
 class PreSpawnCraftyPacket(
-        val entityId: Int,
+        val entityId: Long,
         val spawnLocation: Location,
         val dimension: Int,
         val gamemode: GameMode
@@ -16,14 +16,14 @@ class PreSpawnCraftyPacket(
     object Codec : CraftyPacketCodec() {
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PreSpawnCraftyPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarInt(obj.entityId)
+            stream.writeUnsignedVarLong(obj.entityId)
             stream.writeLocation(obj.spawnLocation)
             stream.writeByte(obj.dimension)
             stream.writeByte(obj.gamemode.ordinal)
         }
         override fun deserialize(stream: MinecraftInputStream): CraftyPacket {
             return PreSpawnCraftyPacket(
-                    entityId = stream.readUnsignedVarInt(),
+                    entityId = stream.readUnsignedVarLong(),
                     spawnLocation = stream.readLocation(),
                     dimension = stream.readUnsignedByte(),
                     gamemode = GameMode.values()[stream.readUnsignedByte()]
