@@ -10,6 +10,29 @@ data class MetadataEntry(
         val type: MetadataType,
         val value: Any?
 ) {
+    init {
+        require(when(type) {
+            MetadataType.BYTE -> value is Byte
+            MetadataType.VARINT -> value is Int
+            MetadataType.FLOAT -> value is Float
+            MetadataType.STRING -> value is String
+            MetadataType.CHAT -> throw NotImplementedError()
+            MetadataType.ITEM_STACK -> throw NotImplementedError()
+            MetadataType.BOOLEAN -> value is Boolean
+            MetadataType.ROTATION -> value is Vector3fc
+            MetadataType.POSITION -> value is Vector3ic
+            MetadataType.OPTIONAL_POSITION -> value is Vector3ic? 
+            MetadataType.DIRECTION -> value is Int
+            MetadataType.OPTIONAL_UUID -> value is UUID?
+            MetadataType.OPTIONAL_BLOCK_ID -> throw NotImplementedError()
+        }) {
+            if(value == null)
+                throw IllegalArgumentException("metadata entry value is null for type $type")
+            else
+                throw IllegalArgumentException("metadata entry value is ${value::class.qualifiedName} for type $type")
+        }
+    }
+    
     fun serialize(stream: MinecraftOutputStream) {
         stream.writeUnsignedVarInt(type.ordinal)
         when(type) {

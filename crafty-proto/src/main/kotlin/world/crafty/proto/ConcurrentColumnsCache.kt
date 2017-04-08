@@ -1,6 +1,6 @@
 package world.crafty.proto
 
-import world.crafty.proto.server.SetChunkColumnCraftyPacket
+import world.crafty.proto.packets.server.SetChunkColumnCraftyPacket
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write

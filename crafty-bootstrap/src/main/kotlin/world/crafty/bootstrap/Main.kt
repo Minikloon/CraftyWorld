@@ -59,7 +59,7 @@ fun startPc(vertx: Vertx, craftyServer: CraftyServer) {
 
 fun startPe(vertx: Vertx, craftyServer: CraftyServer) {
     val elapsed = measureTimeMillis {
-        val peServer = PeConnectionServer(19132, craftyServer.address)
+        val peServer = PeConnectionServer(19133, craftyServer.address)
         vertx.deployVerticle(peServer)
     }
     println("Started Pe connserver in $elapsed ms.")

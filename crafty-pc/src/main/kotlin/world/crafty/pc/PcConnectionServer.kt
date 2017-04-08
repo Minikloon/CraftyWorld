@@ -5,9 +5,13 @@ import io.vertx.core.net.NetServer
 import io.vertx.core.net.NetSocket
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.mojang.MojangClient
+import world.crafty.pc.metadata.translators.MetaTranslatorRegistry
+import world.crafty.pc.metadata.translators.registerBuiltInPcTranslators
 import world.crafty.pc.proto.packets.server.ServerKeepAlivePcPacket
 import world.crafty.pc.proto.PrecompressedPayload
 import world.crafty.proto.ConcurrentColumnsCache
+import world.crafty.proto.metadata.MetaFieldRegistry
+import world.crafty.proto.metadata.registerBuiltInMetaDefinitions
 import world.crafty.proto.registerVertxCraftyCodecs
 import world.crafty.skinpool.protocol.registerVertxSkinPoolCodecs
 import java.util.concurrent.ConcurrentHashMap
@@ -15,8 +19,9 @@ import javax.crypto.Cipher
 
 class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var server: NetServer
-    val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
+    private val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
     private val worldCaches = ConcurrentHashMap<String, ConcurrentColumnsCache<PrecompressedPayload>>() // TODO: share between connections server somehow
+    val metaTranslatorRegistry = MetaTranslatorRegistry()
 
     lateinit var mojang: MojangClient
 
@@ -32,12 +37,15 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
         encodedBrand = MinecraftOutputStream.serialized {
             it.writeSignedString("crafty")
         }
+        
+        metaTranslatorRegistry.registerBuiltInPcTranslators()
     }
 
     override fun start() {
         val eb = vertx.eventBus()
         registerVertxCraftyCodecs(eb)
         registerVertxSkinPoolCodecs(eb)
+        MetaFieldRegistry.registerBuiltInMetaDefinitions()
         
         mojang = MojangClient(vertx)
 

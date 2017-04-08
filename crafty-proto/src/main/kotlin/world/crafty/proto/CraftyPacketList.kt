@@ -1,11 +1,8 @@
 package world.crafty.proto
 
 import io.vertx.core.eventbus.EventBus
-import world.crafty.proto.client.ChatFromClientCraftyPacket
-import world.crafty.proto.client.ChunksRadiusRequestCraftyPacket
-import world.crafty.proto.client.JoinRequestCraftyPacket
-import world.crafty.proto.client.ReadyToSpawnCraftyPacket
-import world.crafty.proto.server.*
+import world.crafty.proto.packets.client.*
+import world.crafty.proto.packets.server.*
 
 private var registered = false
 private val lock = Any()
@@ -27,6 +24,8 @@ fun registerVertxCraftyCodecs(eb: EventBus) {
     eb.registerDefaultCodec<UpdatePlayerListCraftyPacket>(UpdatePlayerListCraftyPacket.Codec)
     eb.registerDefaultCodec<SpawnSelfCraftyPacket>(SpawnSelfCraftyPacket.Codec)
     eb.registerDefaultCodec<AddPlayerCraftyPacket>(AddPlayerCraftyPacket.Codec)
+    eb.registerDefaultCodec<PlayerActionCraftyPacket>(PlayerActionCraftyPacket.Codec)
+    eb.registerDefaultCodec<PatchEntityCraftyPacket>(PatchEntityCraftyPacket.Codec)
 }
 
 private inline fun <reified T : CraftyPacket> EventBus.registerDefaultCodec(codec: CraftyPacket.CraftyPacketCodec) {

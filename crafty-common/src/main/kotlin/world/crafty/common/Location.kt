@@ -52,4 +52,8 @@ class Location(
     fun setY(y: Float) : Location {
         return Location(x, y, z, yaw, pitch)
     }
+
+    override fun toString(): String {
+        return "($x, $y, $z; ${yaw.increment}, ${pitch.increment})"
+    }
 }

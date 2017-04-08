@@ -6,8 +6,12 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.core.datagram.DatagramSocket
 import io.vertx.core.json.Json
 import io.vertx.core.net.SocketAddress
+import world.crafty.pe.metadata.translators.MetaTranslatorRegistry
+import world.crafty.pe.metadata.translators.registerBuiltInPeTranslators
 import world.crafty.pe.proto.packets.mixed.EncryptionWrapperPePacket
 import world.crafty.proto.ConcurrentColumnsCache
+import world.crafty.proto.metadata.MetaFieldRegistry
+import world.crafty.proto.metadata.registerBuiltInMetaDefinitions
 import world.crafty.proto.registerVertxCraftyCodecs
 import world.crafty.skinpool.protocol.registerVertxSkinPoolCodecs
 import java.security.KeyPairGenerator
@@ -17,9 +21,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var socket: DatagramSocket
+    private val worldCaches = ConcurrentHashMap<String, ConcurrentColumnsCache<EncryptionWrapperPePacket>>() // TODO: share between connections server somehow
     val sessions: MutableMap<SocketAddress, CompletableFuture<PeNetworkSession>> = mutableMapOf()
     val supportsEncryption = false
-    private val worldCaches = ConcurrentHashMap<String, ConcurrentColumnsCache<EncryptionWrapperPePacket>>() // TODO: share between connections server somehow
+    val metaTranslatorRegistry = MetaTranslatorRegistry()
     
     val keyPair = {
         val keyGen = KeyPairGenerator.getInstance("EC")
@@ -33,6 +38,8 @@ class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
         Json.mapper.configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
         registerVertxCraftyCodecs(eb)
         registerVertxSkinPoolCodecs(eb)
+        MetaFieldRegistry.registerBuiltInMetaDefinitions()
+        metaTranslatorRegistry.registerBuiltInPeTranslators()
         
         socket = vertx.createDatagramSocket()
         socket.listen(port, "0.0.0.0") {

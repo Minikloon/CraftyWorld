@@ -1,7 +1,7 @@
 package world.crafty.proto
 
-import world.crafty.proto.server.ChunkCacheStategy
-import world.crafty.proto.server.SetChunkColumnCraftyPacket
+import world.crafty.proto.packets.server.ChunkCacheStategy
+import world.crafty.proto.packets.server.SetChunkColumnCraftyPacket
 
 class CraftyChunkColumn(
         val x: Int,

@@ -9,13 +9,17 @@ fun Byte.toHexStr() : String {
     return "0x$char1$char2"
 }
 
-fun Int.toHexStr() : String {
-    val i = this
+fun Short.toHexStr() : String {
+    val i = this.toInt()
     val char4 = HEX_CHARS[i and 0x000f]
     val char3 = HEX_CHARS[i shr 12 and 0x000f]
     val char2 = HEX_CHARS[i shr 8 and 0x000f]
     val char1 = HEX_CHARS[i shr 4 and 0x000f]
-    return "0x$char4$char3$char2$char1"
+    return "0x${not0(char4)}${not0(char3)}${not0(char2)}$char1"
+}
+
+private fun not0(value: Char) : String {
+    return if(value == '0') "" else "$value"
 }
 
 fun Long.toBytes() : ByteArray {

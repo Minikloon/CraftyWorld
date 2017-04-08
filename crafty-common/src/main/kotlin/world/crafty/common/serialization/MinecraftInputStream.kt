@@ -9,11 +9,13 @@ import org.joml.Vector3i
 import org.joml.Vector3ic
 import world.crafty.common.Angle256
 import world.crafty.common.Location
+import world.crafty.common.utils.toHexStr
 import world.crafty.common.vertx.BufferInputStream
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.net.InetAddress
 import java.util.*
 
 class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
@@ -138,9 +140,24 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
 
     fun readAddress() : SocketAddress {
         val version = readByte().toInt()
-        val host = "${readByte()}.${readByte()}.${readByte()}.${readByte()}"
-        val port = readShort().toInt()
-        return SocketAddressImpl(port, host)
+        return when(version) {
+            4 -> {
+                val host = "${readByte()}.${readByte()}.${readByte()}.${readByte()}"
+                val port = readShort().toInt()
+                SocketAddressImpl(port, host)
+            }
+            6 ->  {
+                val family = readShort()
+                val port = readShort()
+                val flow = readLong()
+                val address = readByteArray(16)
+                val addressStr = ShortArray(8) {
+                    ((address[it].toInt() shl 8) or (address[it].toInt())).toShort()
+                }.map { it.toHexStr().substring(2) }.joinToString(":")
+                SocketAddressImpl(port.toInt(), addressStr)
+            }
+            else -> throw IllegalStateException("Unknown IP version $version")
+        }
     }
     
     fun readVector2f() : Vector2f {

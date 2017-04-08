@@ -15,6 +15,7 @@ import world.crafty.common.utils.hashFnv1a64
 import world.crafty.common.vertx.*
 import world.crafty.pe.jwt.payloads.CertChainLink
 import world.crafty.pe.jwt.payloads.PeClientData
+import world.crafty.pe.metadata.PeEntity
 import world.crafty.pe.metadata.PeMetadataMap
 import world.crafty.pe.proto.*
 import world.crafty.pe.proto.packets.client.*
@@ -26,12 +27,9 @@ import world.crafty.pe.world.toPePacket
 import world.crafty.proto.CraftyChunkColumn
 import world.crafty.proto.CraftySkin
 import world.crafty.proto.MinecraftPlatform
-import world.crafty.proto.client.ChatFromClientCraftyPacket
-import world.crafty.proto.client.ChunksRadiusRequestCraftyPacket
-import world.crafty.proto.client.JoinRequestCraftyPacket
-import world.crafty.proto.client.ReadyToSpawnCraftyPacket
-import world.crafty.proto.server.*
-import world.crafty.proto.server.ChunkCacheStategy.*
+import world.crafty.proto.packets.client.*
+import world.crafty.proto.packets.server.*
+import world.crafty.proto.packets.server.ChunkCacheStategy.*
 import world.crafty.skinpool.CraftySkinPoolServer
 import world.crafty.skinpool.protocol.client.HashPollPoolPacket
 import world.crafty.skinpool.protocol.client.SaveSkinPoolPacket
@@ -66,7 +64,9 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     
     private val packetSendQueue = mutableListOf<PePacket>()
     
+    private var ownEntityId: Long = 0
     private var location = Location(0f, 0f, 0f)
+    private val loadedEntities = mutableMapOf<Long, PeEntity>()
     
     private lateinit var eb: EventBus
 
@@ -215,6 +215,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                         throw IllegalStateException("CraftyServer denied our join request :(")
 
                     val prespawn = craftyResponse.prespawn!!
+                    ownEntityId = prespawn.entityId
                     location = prespawn.spawnLocation
                     queueSend(StartGamePePacket(
                             entityId = prespawn.entityId,
@@ -264,59 +265,19 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
             }
             is ChunkRadiusRequestPePacket -> {
                 println("Requested chunk radius: ${message.desiredChunkRadius}")
-                val chunkRadius = message.desiredChunkRadius
+                val chunkRadius = Math.min(5, message.desiredChunkRadius)
                 queueSend(SetChunkRadiusPePacket(chunkRadius))
-                
-                /*
-                eb.typedConsumer("p:c:$craftyPlayerId", UpdatePlayerListCraftyPacket::class) {
-                    val byItemType = it.body().items.groupBy { it.type }
-                    byItemType.forEach {
-                        val itemType = it.key
-                        val craftyItems = it.value
-
-                        val action: PlayerListAction
-                        val peItems = mutableListOf<PlayerListPeItem>()
-
-                        when(itemType) {
-                            PlayerListItemType.ADD -> {
-                                action = PlayerListAction.ADD
-                                peItems.addAll(craftyItems.map {
-                                    val add = it as PlayerListAdd
-                                    PlayerListPeAdd(
-                                            uuid = add.uuid,
-                                            entityId = add.entityId,
-                                            name = add.name,
-                                            skin = PeSkin.fromCrafty(add.skin)
-                                    )
-                                })
-                            }
-                            PlayerListItemType.REMOVE -> {
-                                action = PlayerListAction.REMOVE
-                                peItems.addAll(craftyItems.map { 
-                                    PlayerListPeRemove(
-                                            uuid = it.uuid
-                                    )
-                                })
-                            }
-                        }
-                        
-                        peItems.removeIf { 
-                            it is PlayerListPeAdd && it.entityId == craftyPlayerId.toLong() // TODO: hack
-                        }
-                        
-                        queueSend(PlayerListItemPePacket(
-                                action = action,
-                                items = peItems
-                        ))
-                    }
-                }
-                */
 
                 eb.typedConsumer("p:c:$craftyPlayerId", AddPlayerCraftyPacket::class) {
                     val packet = it.body()
+
+                    val entity = PeEntity(packet.entityId)
+                    loadedEntities[entity.id] = entity
                     
-                    if(packet.entityId == craftyPlayerId.toLong())// TODO: fix hack
+                    if(packet.craftyId == craftyPlayerId)
                         return@typedConsumer
+                    
+                    val metadata = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.meta)
                     
                     queueSend(PlayerListItemPePacket(
                             action = PlayerListAction.ADD,
@@ -344,9 +305,16 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                             headYaw = packet.location.yaw.toDegrees(),
                             bodyYaw = packet.location.yaw.toDegrees(),
                             itemInHand = PeItem(0, 0, 0, null),
-                            metadata = PeMetadataMap()
+                            metadata = metadata
                     ))
                     queueSend(PlayerListItemPePacket(PlayerListAction.REMOVE, listOf(PlayerListPeRemove(packet.uuid))))
+                }
+                
+                eb.typedConsumer("p:c:$craftyPlayerId", PatchEntityCraftyPacket::class) {
+                    val packet = it.body()
+                    val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
+                    val meta = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.values)
+                    queueSend(EntityMetadataPePacket(packet.entityId, meta))
                 }
                 
                 eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {
@@ -354,7 +322,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 }
                 
                 val cache = server.getWorldCache(worldServer)
-                eb.send<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId:chunkRadiusReq", ChunksRadiusRequestCraftyPacket(location.positionVec3(), 0, chunkRadius)) {
+                eb.typedSend<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId", ChunksRadiusRequestCraftyPacket(location.positionVec3(), 0, chunkRadius)) {
                     val response = it.result().body()
                     response.chunkColumns.forEach { setColumn ->
                         val chunkPacket = when(setColumn.cacheStrategy) {
@@ -368,14 +336,34 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     eb.typedSend("p:s:$craftyPlayerId", ReadyToSpawnCraftyPacket())
                 }
             }
-            is PlayerActionPePacket -> {
-                println("action ${message.action}") 
+            is PlayerActionPePacket -> {                
+                val action = message.action
+                val craftyAction = when(action) {
+                    PePlayerAction.START_BREAK -> return
+                    PePlayerAction.ABORT_BREAK -> return
+                    PePlayerAction.STOP_BREAK -> return
+                    PePlayerAction.UNKNOWN_3 -> return
+                    PePlayerAction.UNKNOWN_4 -> return
+                    PePlayerAction.RELEASE_ITEM -> PlayerAction.DROP_ITEM
+                    PePlayerAction.STOP_SLEEPING -> PlayerAction.LEAVE_BED
+                    PePlayerAction.RESPAWN -> return
+                    PePlayerAction.JUMP -> return
+                    PePlayerAction.START_SPRINT -> PlayerAction.START_SPRINT
+                    PePlayerAction.STOP_SPRINT -> PlayerAction.STOP_SPRINT
+                    PePlayerAction.START_SNEAK -> PlayerAction.START_SNEAK
+                    PePlayerAction.STOP_SNEAK -> PlayerAction.STOP_SNEAK
+                    PePlayerAction.START_DIMENSION_CHANGE -> return
+                    PePlayerAction.ABORT_DIMENSION_CHANGE -> return
+                    PePlayerAction.START_GLIDE -> return
+                    PePlayerAction.STOP_GLIDE -> return
+                }
+                eb.typedSend("p:s:$craftyPlayerId", PlayerActionCraftyPacket(craftyAction))
             }
             is SetPlayerPositionPePacket -> {
                 //println("pos: ${message.x} ${message.y} ${message.z}")
             }
             is ChatPePacket -> {
-                eb.send("p:s:$craftyPlayerId:chat", ChatFromClientCraftyPacket(message.text))
+                eb.typedSend("p:s:$craftyPlayerId", ChatFromClientCraftyPacket(message.text))
             }
             else -> {
                 println("Unhandled pe message ${message.javaClass.simpleName}")

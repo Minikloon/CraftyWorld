@@ -74,8 +74,8 @@ class PlayerListPcAdd(
             obj.properties.forEach {
                 stream.writeSignedString(it.name)
                 stream.writeSignedString(it.value)
-                stream.writeBoolean(it.signature != null)
                 val signature = it.signature
+                stream.writeBoolean(signature != null)
                 if (signature != null)
                     stream.writeSignedString(signature)
             }

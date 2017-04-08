@@ -67,6 +67,7 @@
     <orderEntry type="module" module-name="crafty-common_main" />
     <orderEntry type="module" module-name="crafty-proto_main" />
     <orderEntry type="module" module-name="crafty-skinpool_main" />
+    <orderEntry type="module" module-name="crafty-nbt_main" />
     <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-stdlib-jre7:1.1.1" level="project" />
     <orderEntry type="library" name="Gradle: org.jetbrains.kotlin:kotlin-stdlib:1.1.1" level="project" />
     <orderEntry type="library" name="Gradle: io.vertx:vertx-core:3.4.1" level="project" />
@@ -91,6 +92,5 @@
     <orderEntry type="library" name="Gradle: io.netty:netty-codec-socks:4.1.8.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-codec-dns:4.1.8.Final" level="project" />
     <orderEntry type="library" name="Gradle: com.fasterxml.jackson.core:jackson-core:2.8.7" level="project" />
-    <orderEntry type="module" module-name="crafty-nbt_main" />
   </component>
 </module>

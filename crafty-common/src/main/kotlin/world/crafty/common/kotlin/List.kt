@@ -8,3 +8,10 @@ fun <T : Any> MutableList<T>.firstOrCompute(predicate: (T) -> Boolean, supplier:
     }
     return elem
 }
+
+fun <T: Any> flatListOf(vararg lists: List<T>) : List<T> {
+    val size = lists.sumBy { it.size }
+    val fullList = ArrayList<T>(size)
+    lists.forEach { fullList.addAll(it) }
+    return fullList
+}
