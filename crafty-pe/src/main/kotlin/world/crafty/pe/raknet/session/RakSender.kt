@@ -6,12 +6,14 @@ import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.utils.EvictingQueue
 import world.crafty.common.utils.average
 import world.crafty.common.kotlin.firstOrCompute
+import world.crafty.common.utils.getLogger
 import world.crafty.pe.raknet.*
 import java.io.ByteArrayOutputStream
 import java.time.Duration
 import java.time.Instant
 import java.util.*
 
+private val log = getLogger<RakSender>()
 class RakSender(val session: RakNetworkSession) {
     private var datagramSeqNo: Int = 0
     private var messageSeqNo: Int = 0
@@ -120,7 +122,7 @@ class RakSender(val session: RakNetworkSession) {
         needAcks.values.forEach { sentDatagram ->
             if(sentDatagram.sinceLastSend.toMillis() > ackTimeoutMs) {
                 queueDatagram(sentDatagram.datagram)
-                println("resend!")
+                log.trace("resend!")
             }
         }
     }

@@ -11,4 +11,5 @@ dependencies {
     compile "org.joml:joml:1.9.2"
     compile "com.fasterxml.jackson.module:jackson-module-kotlin:2.8.7"
     compile "com.fasterxml.jackson.core:jackson-databind:2.8.7" // override vert.x
+    compile "org.slf4j:slf4j-api:1.7.25"
 }

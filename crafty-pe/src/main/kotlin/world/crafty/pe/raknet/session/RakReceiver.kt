@@ -3,6 +3,9 @@ package world.crafty.pe.raknet.session
 import io.vertx.core.Vertx
 import io.vertx.core.datagram.DatagramPacket
 import world.crafty.common.serialization.MinecraftInputStream
+import world.crafty.common.utils.getLogger
+import world.crafty.common.utils.trace
+import world.crafty.common.utils.warn
 import world.crafty.pe.proto.PePacket
 import world.crafty.pe.proto.ServerBoundPeRaknetPackets
 import world.crafty.pe.proto.packets.client.UnconnectedPingClientPePacket
@@ -11,6 +14,7 @@ import world.crafty.pe.raknet.packets.*
 import java.util.ArrayList
 import java.util.concurrent.ConcurrentLinkedQueue
 
+private val log = getLogger<RakReceiver>()
 class RakReceiver(val session: RakNetworkSession, val onAck: (AckPePacket) -> Unit, val onNack: () -> Unit, val handlePayload: (MinecraftInputStream) -> Unit) {
     private val incomingQueue = ConcurrentLinkedQueue<DatagramPacket>()
 
@@ -109,7 +113,7 @@ class RakReceiver(val session: RakNetworkSession, val onAck: (AckPePacket) -> Un
     private fun handleRakNetPacket(header: RakDatagramFlags, mcStream: MinecraftInputStream) {
         val codec = ServerBoundPeRaknetPackets.idToCodec[header.packetId.toInt()]
         if(codec == null) {
-            println("Unknown pe raknet packet id ${header.packetId}")
+            log.warn { "Unknown pe raknet packet id ${header.packetId}" }
             return
         }
 
@@ -122,18 +126,18 @@ class RakReceiver(val session: RakNetworkSession, val onAck: (AckPePacket) -> Un
                 session.sendRaw(reply)
             }
             is OpenConnectionRequest1PePacket -> {
-                println("open connection request 1 mtu ${packet.mtuSize}")
+                log.trace { "open connection request 1 mtu ${packet.mtuSize}" }
                 session.mtuSize = packet.mtuSize - 68
                 val reply = OpenConnectionReply1PePacket(1234, false, packet.mtuSize)
                 session.sendRaw(reply)
             }
             is OpenConnectionRequest2PePacket -> {
-                println("open connection request 2")
+                log.trace { "open connection request 2" }
                 val reply = OpenConnectionReply2PePacket(1234, session.address, packet.mtuSize, false)
                 session.sendRaw(reply)
             }
             else -> {
-                println("unhandled packet ${packet.javaClass.name}")
+                log.warn { "unhandled raknet packet ${packet.javaClass.name}" }
             }
         }
     }

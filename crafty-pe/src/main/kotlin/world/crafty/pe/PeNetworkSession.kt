@@ -11,7 +11,7 @@ import kotlinx.coroutines.experimental.launch
 import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
-import world.crafty.common.utils.hashFnv1a64
+import world.crafty.common.utils.*
 import world.crafty.common.vertx.*
 import world.crafty.pe.jwt.payloads.CertChainLink
 import world.crafty.pe.jwt.payloads.PeClientData
@@ -45,6 +45,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
+private val log = getLogger<PeNetworkSession>()
 class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, socket: DatagramSocket, address: SocketAddress) : RakNetworkSession(socket, address) {
     private var loggedIn = false
     var loginExtraData: LoginExtraData? = null // TODO: split the session by login stages to avoid these shits
@@ -92,7 +93,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
         val id = payload.read()
         val codec = ServerBoundPeTopLevelPackets.idToCodec[id]
         if(codec == null) {
-            println("Unknown pe message id $id")
+            log.error { "Unknown pe message id $id" }
             return
         }
         val message = codec.deserialize(payload)
@@ -103,17 +104,16 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     
     private suspend fun handlePeMessage(message: PePacket) {
         if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerPositionPePacket && message !is ConnectedPingPePacket)
-            println("${System.currentTimeMillis()} HANDLE ${message::class.java.simpleName}")
+            log.trace { "HANDLE ${message::class.simpleName}" }
         when(message) {
             is ConnectedPingPePacket -> {
                 val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
                 send(response, UNRELIABLE)
             }
             is NewIncomingConnection -> {
-                println("A client at ${address.host()} is now officially connected!")
+                log.info { "A client at ${address.host()} is now officially connected!" }
             }
             is ConnectionRequestPePacket -> {
-                println("connected connection request...")
                 val response = ConnectionRequestAcceptPePacket(
                         systemAddress = SocketAddressImpl(19132, "127.0.0.1"),
                         systemIndex = 0,
@@ -202,11 +202,10 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     loggedIn = true
                     queueSend(PlayerStatusPePacket(PlayerStatus.LOGIN_ACCEPTED))
                     queueSend(ResourcePackTriggerPePacket(false, listOf(), listOf()))
-                    println("Login from $address ${message.protocolVersion} ${message.edition}")
+                    log.info { "Login from $address ${message.protocolVersion} ${message.edition}" }
                 }
             }
             is ResourcePackClientResponsePePacket -> {
-                println("resource pack response status: ${message.status}")
                 val startGame: suspend () -> Unit = {
                     val username = loginExtraData?.displayName ?: throw IllegalStateException("ResourcePackClientResponse without prior login!")
                     val skin = craftySkin ?: throw IllegalStateException("ResourcePackClientResponse without skin!")
@@ -250,7 +249,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     queueSend(SetChunkRadiusPePacket(5))
                     queueSend(SetAttributesPePacket(0, PlayerAttribute.defaults))
                 }
-                println("status ${message.status}")
+                
                 when(message.status) {
                     ResourcePackClientStatus.REQUEST_DATA -> {
                         startGame()
@@ -264,7 +263,6 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 }
             }
             is ChunkRadiusRequestPePacket -> {
-                println("Requested chunk radius: ${message.desiredChunkRadius}")
                 val chunkRadius = Math.min(5, message.desiredChunkRadius)
                 queueSend(SetChunkRadiusPePacket(chunkRadius))
 
@@ -331,7 +329,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                         }
                         send(chunkPacket, RELIABLE_ORDERED)
                     }
-                    println("sent pe ${response.chunkColumns.size} chunks")
+                    log.debug { "sent pe ${response.chunkColumns.size} chunks" }
                     
                     eb.typedSend("p:s:$craftyPlayerId", ReadyToSpawnCraftyPacket())
                 }
@@ -360,13 +358,13 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 eb.typedSend("p:s:$craftyPlayerId", PlayerActionCraftyPacket(craftyAction))
             }
             is SetPlayerPositionPePacket -> {
-                //println("pos: ${message.x} ${message.y} ${message.z}")
+                
             }
             is ChatPePacket -> {
                 eb.typedSend("p:s:$craftyPlayerId", ChatFromClientCraftyPacket(message.text))
             }
             else -> {
-                println("Unhandled pe message ${message.javaClass.simpleName}")
+                log.warn { "Unhandled pe message ${message.javaClass.simpleName}" }
             }
         }
     }
@@ -374,7 +372,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     fun queueSend(packet: PePacket) {
         require(packet !is CompressionWrapperPePacket) { "can't queue up compression wrappers, send them directly or queue their decompressed content" }
         packetSendQueue.add(packet)
-        println("${System.currentTimeMillis()} QUEUE ${packet::class.java.simpleName}")
+        log.trace { "${System.currentTimeMillis()} QUEUE ${packet::class.java.simpleName}" }
     }
 
     private fun processPacketSendQueue() {

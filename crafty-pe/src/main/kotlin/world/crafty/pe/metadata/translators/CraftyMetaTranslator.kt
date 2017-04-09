@@ -1,5 +1,7 @@
 package world.crafty.pe.metadata.translators
 
+import world.crafty.common.utils.getLogger
+import world.crafty.common.utils.warn
 import world.crafty.pe.metadata.MetadataEntry
 import world.crafty.pe.metadata.PeEntity
 import world.crafty.proto.metadata.MetaField
@@ -19,7 +21,7 @@ object MetaNotImplementedYet : PeCraftyMetaTranslator {
     var called = false
     override fun fromCrafty(entity: PeEntity, meta: MetaValue): Map<Int, MetadataEntry>? {
         if(!called) {
-            println("PE meta translator for crafty field ${meta.fieldId} isn't implemented yet! GET ON IT!")
+            getLogger("pe-meta").warn { "PE meta translator for crafty field ${meta.fieldId} isn't implemented yet! GET ON IT!" }
             called = true
         }
         return null

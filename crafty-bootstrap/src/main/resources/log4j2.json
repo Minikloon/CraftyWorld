@@ -1,0 +1,37 @@
+{
+  "configuration": {
+    "status": "error",
+    "name": "CraftyBootstrapDefault",
+    "packages": "org.apache.logging.log4j.test",
+    "appenders": {
+      "Console": {
+        "name": "console",
+        "PatternLayout": {
+          "pattern": "%d{DATE} %c %m%n"
+        }
+      },
+      "File": {
+        "name": "file",
+        "fileName": "logs/crafty-world.log",
+        "PatternLayout": {
+          "pattern": "%d{ABSOLUTE} %c %m%n"
+        }
+      }
+    },
+    "loggers": {
+      "logger": {
+        "name": "crafty-bootstrap",
+        "level": "info",
+        "AppenderRef": {
+          "ref": "console"
+        }
+      },
+      "root": {
+        "level": "info",
+        "AppenderRef": {
+          "ref": "file"
+        }
+      }
+    }
+  }
+}

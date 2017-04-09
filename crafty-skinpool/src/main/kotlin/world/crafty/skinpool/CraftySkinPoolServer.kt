@@ -5,7 +5,7 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.Json
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.launch
-import world.crafty.common.utils.sinceThen
+import world.crafty.common.utils.*
 import world.crafty.common.vertx.*
 import world.crafty.mojang.MojangClient
 import world.crafty.skinpool.protocol.client.HashPollPoolPacket
@@ -20,6 +20,7 @@ import java.nio.file.Paths
 import java.util.*
 import javax.imageio.ImageIO
 
+private val log = getLogger<CraftySkinPoolServer>()
 class CraftySkinPoolServer private constructor(
         private val accounts: List<AccountCredentials>,
         private val hashProfileRepo: FileHashProfileRepo
@@ -45,7 +46,7 @@ class CraftySkinPoolServer private constructor(
                 try {
                     it.third.await()
                 } catch(e: Exception) {
-                    println("Failed to authenticate account with user ${account.username} & uuid ${account.uuid}")
+                    log.warn { "Failed to authenticate account with user ${account.username} & uuid ${account.uuid}" }
                     e.printStackTrace()
                     return@forEach
                 }
@@ -54,10 +55,10 @@ class CraftySkinPoolServer private constructor(
             
             
             if(uploaders.isEmpty()) {
-                println("No account is authenticated, can't upload new skins!")
+                log.error { "No account is authenticated, can't upload new skins!" }
             }
             else {
-                println("${uploaders.size} accounts ready for upload, ${uploaders.size - accounts.size} failed")
+                log.info { "${uploaders.size} accounts ready for upload, ${uploaders.size - accounts.size} failed" }
             }
             
             eb.typedConsumer(channelPrefix, HashPollPoolPacket::class) {
@@ -73,12 +74,12 @@ class CraftySkinPoolServer private constructor(
             eb.typedConsumer(channelPrefix, SaveSkinPoolPacket::class) {
                 val saveSkin = it.body()
                 skinQueue.add(saveSkin)
-                println("add saveskin to queue ${saveSkin.hash}")
+                log.trace { "add saveskin to queue ${saveSkin.hash}" }
             }
             
             eb.typedConsumer(channelPrefix, SaveProfilePoolPacket::class) {
                 val body = it.body()
-                println("saving ${body.hash} to file")
+                log.trace { "saving ${body.hash} to file" }
                 hashProfileRepo[body.hash] = body.textureProperty
             }
         }
@@ -96,7 +97,7 @@ class CraftySkinPoolServer private constructor(
         for(i in 0 until processCount) {
             val mojangUploader = availableUploaders[i]
             val skin = skinQueue.poll() ?: return
-            println("process upload for ${skin.hash}")
+            log.trace { "process upload for ${skin.hash}" }
 
             launch(CurrentVertx) {
                 if(mojangUploader.lastUpload.sinceThen() < SkinUploader.uploadRateLimit) {
@@ -106,7 +107,7 @@ class CraftySkinPoolServer private constructor(
                 
                 val img = ImageIO.read(ByteArrayInputStream(skin.skinPng))
                 val skinProfileProperty = mojangUploader.uploadAsync(img, skin.slim)
-                println("uploaded ${skin.hash}")
+                log.trace { "uploaded ${skin.hash}" }
                 vertx.eventBus().typedPublish(channelPrefix, SaveProfilePoolPacket(skin.hash, skinProfileProperty))
             }
         }
@@ -125,7 +126,7 @@ class CraftySkinPoolServer private constructor(
             if(! Files.exists(accountsPath)) {
                 val bundled = this::class.java.getResourceAsStream("/$accountsFile")
                 Files.copy(bundled, accountsPath)
-                println("Generated $accountsFile, fill it in and restart")
+                log.warn { "Generated $accountsFile, fill it in and restart" }
             }
 
             val profilesPath = Paths.get(profilesFile)

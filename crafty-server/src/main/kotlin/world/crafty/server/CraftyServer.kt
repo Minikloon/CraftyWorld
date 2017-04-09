@@ -1,6 +1,8 @@
 package world.crafty.server
 
 import io.vertx.core.AbstractVerticle
+import world.crafty.common.utils.getLogger
+import world.crafty.common.utils.info
 import world.crafty.common.vertx.typedSend
 import world.crafty.proto.GameMode
 import world.crafty.proto.packets.client.JoinRequestCraftyPacket
@@ -11,6 +13,7 @@ import world.crafty.proto.packets.server.JoinResponseCraftyPacket
 import world.crafty.proto.packets.server.PreSpawnCraftyPacket
 import world.crafty.server.world.World
 
+private val log = getLogger<CraftyServer>()
 class CraftyServer(val address: String, val world: World) : AbstractVerticle() {
     private var playerIdCounter = 0
     private val playersById = mutableMapOf<Int, CraftyPlayer>()
@@ -28,7 +31,7 @@ class CraftyServer(val address: String, val world: World) : AbstractVerticle() {
             val playerId = ++playerIdCounter
             val craftyPlayer = CraftyPlayer(this, eb, playerId, request.username, request.authMojang, request.authXbox, request.platform, request.skin, world.spawn)
             playersById[playerId] = craftyPlayer
-            println("(Crafty) ${it.body().username} joined, id $playerId!")
+            log.info { "(Crafty) ${it.body().username} joined, id $playerId!" }
             it.reply(JoinResponseCraftyPacket(playerId, PreSpawnCraftyPacket(
                     entityId = craftyPlayer.entityId,
                     spawnLocation = world.spawn,

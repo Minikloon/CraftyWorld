@@ -4,6 +4,8 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.core.net.NetServer
 import io.vertx.core.net.NetSocket
 import world.crafty.common.serialization.MinecraftOutputStream
+import world.crafty.common.utils.getLogger
+import world.crafty.common.utils.info
 import world.crafty.mojang.MojangClient
 import world.crafty.pc.metadata.translators.MetaTranslatorRegistry
 import world.crafty.pc.metadata.translators.registerBuiltInPcTranslators
@@ -17,6 +19,7 @@ import world.crafty.skinpool.protocol.registerVertxSkinPoolCodecs
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 
+private val log = getLogger<PcConnectionServer>()
 class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var server: NetServer
     private val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
@@ -54,7 +57,7 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
             val session = PcNetworkSession(this, worldServer, it)
             sessions[it] = session
             it.handler { session.receive(it) }
-            println("Received PC connection from ${it.remoteAddress()}")
+            log.info { "Received PC connection from ${it.remoteAddress()}" }
         }
         server.listen(port)
 

@@ -3,6 +3,8 @@ package world.crafty.server
 import io.vertx.core.eventbus.EventBus
 import io.vertx.core.eventbus.Message
 import world.crafty.common.Location
+import world.crafty.common.utils.getLogger
+import world.crafty.common.utils.info
 import world.crafty.common.vertx.typedConsumer
 import world.crafty.common.vertx.typedSend
 import world.crafty.proto.CraftyPacket
@@ -14,6 +16,7 @@ import world.crafty.server.entity.PlayerEntity
 import java.util.*
 import kotlin.reflect.KClass
 
+private val log = getLogger<CraftyPlayer>()
 class CraftyPlayer(
         private val server: CraftyServer,
         private val eb: EventBus,
@@ -56,7 +59,7 @@ class CraftyPlayer(
             eb.typedSend("p:c:$id", SpawnSelfCraftyPacket())
             entity = world.spawn { PlayerEntity(it, entityId, this, spawnLocation) }
             world.addViewer(this)
-            println("Crafty spawning player $username!")
+            log.info { "Crafty spawning player $username!" }
         }
         
         consume(PlayerActionCraftyPacket::class) {
@@ -69,7 +72,7 @@ class CraftyPlayer(
                     entity?.metaPlayer?.crouched = false
                 }
                 else -> {
-                    println("Crafty Unimplemented action $action")
+                    log.info { "Crafty Unimplemented action $action" }
                 }
             }
         }

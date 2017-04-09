@@ -74,6 +74,7 @@
     <orderEntry type="library" name="Gradle: org.joml:joml:1.9.2" level="project" />
     <orderEntry type="library" name="Gradle: com.fasterxml.jackson.module:jackson-module-kotlin:2.8.7" level="project" />
     <orderEntry type="library" name="Gradle: com.fasterxml.jackson.core:jackson-databind:2.8.7" level="project" />
+    <orderEntry type="library" name="Gradle: org.slf4j:slf4j-api:1.7.25" level="project" />
     <orderEntry type="library" name="Gradle: org.jetbrains:annotations:13.0" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-common:4.1.8.Final" level="project" />
     <orderEntry type="library" name="Gradle: io.netty:netty-buffer:4.1.8.Final" level="project" />

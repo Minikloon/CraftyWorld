@@ -10,14 +10,11 @@ import kotlinx.coroutines.experimental.launch
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.PcNetworkSession.State.*
-import world.crafty.common.utils.Clock
 import world.crafty.pc.proto.*
 import world.crafty.pc.proto.packets.client.*
 import world.crafty.pc.proto.packets.server.*
 import world.crafty.common.Location
-import world.crafty.common.utils.CompressionAlgorithm
-import world.crafty.common.utils.decompressed
-import world.crafty.common.utils.hashFnv1a64
+import world.crafty.common.utils.*
 import world.crafty.common.vertx.*
 import world.crafty.mojang.MojangProfile
 import world.crafty.pc.metadata.PcEntity
@@ -41,6 +38,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
+private val log = getLogger<PcNetworkSession>()
 class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, private val socket: NetSocket) {
     var state: State = HANDSHAKE
     val lastUpdate = Clock()
@@ -119,12 +117,12 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
 
         val codec = state.pcPacketList.idToCodec[packetId]
         if(codec == null) {
-            println("${System.currentTimeMillis()} Unknown pc packet id $packetId while in state $state")
+            log.error { "${System.currentTimeMillis()} Unknown pc packet id $packetId while in state $state" }
             return
         }
         val packet = codec.deserialize(stream)
         if(packet !is ClientKeepAlivePcPacket && packet !is PlayerPositionPcPacket && packet !is PlayerPosAndLookPcPacket && packet !is PlayerLookPcPacket)
-            println("received ${packet.javaClass.simpleName}")
+            log.trace { "received ${packet.javaClass.simpleName}" }
 
         when (state) {
             HANDSHAKE -> handleHandshakePacket(packet)
@@ -138,14 +136,14 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     private fun handleHandshakePacket(packet: PcPacket) {
         when (packet) {
             is HandshakePcPacket -> {
-                println("Received handshake from ${socket.remoteAddress()}")
+                log.info { "Received handshake from ${socket.remoteAddress()}" }
                 when(packet.nextState) {
                     1 -> state = STATUS
                     2 -> state = LOGIN
                 }
             }
             else -> {
-                println("Unhandled Handshake packet ${packet.javaClass.simpleName}")
+                log.error { "Unhandled Handshake packet ${packet.javaClass.simpleName}" }
             }
         }
     }
@@ -153,7 +151,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     private fun handleStatusPacket(packet: PcPacket) {
         when (packet) {
             is StatusRequestPcPacket -> {
-                println("Received server list request from ${socket.remoteAddress()}")
+                log.info { "Received server list request from ${socket.remoteAddress()}" }
                 
                 val lpr = StatusResponsePcPacket(
                         StatusResponsePcPacket.ServerVersion(
@@ -173,7 +171,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 send(PongPcPacket(packet.epoch))
             }
             else -> {
-                println("Unhandled Status packet ${packet.javaClass.simpleName}")
+                log.error { "Unhandled Status packet ${packet.javaClass.simpleName}" }
             }
         }
     }
@@ -182,12 +180,12 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
         when (packet) {
             is LoginStartPcPacket -> {
                 username = packet.username
-                println("Login start from ${packet.username}")
+                log.info { "Login start from ${packet.username}" }
                 send(EncryptionRequestPcPacket(sessionId, server.x509PubKey, verifyToken))
             }
             is EncryptionResponsePcPacket -> {
                 if(! Arrays.equals(server.decipher.doFinal(packet.verifyToken), verifyToken)) {
-                    println("Session ${socket.remoteAddress()} sent the wrong verification token")
+                    log.warn { "Session ${socket.remoteAddress()} sent the wrong verification token" }
                     socket.close()
                     return
                 }
@@ -195,7 +193,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 cipher = createCipher(Cipher.ENCRYPT_MODE, sharedSecret)
                 decipher = createCipher(Cipher.DECRYPT_MODE, sharedSecret)
                 encrypted = true
-                println("Now encrypting with ${socket.remoteAddress()}")
+                log.info { "Now encrypting with ${socket.remoteAddress()}" }
 
                 send(SetCompressionPcPacket(compressionThreshold))
                 compressing = true
@@ -310,7 +308,6 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                         val packet = it.body()
                         val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
                         val meta = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.values)
-                        println("pc ${packet.entityId} ${meta.entries.map { "${it.type} ${it.value}" }.joinToString()}")
                         send(EntityMetadataPcPacket(packet.entityId.toInt(), meta))
                     }
 
@@ -342,7 +339,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 }
             }
             else -> {
-                println("Unhandled Login packet ${packet.javaClass.simpleName}")
+                log.error { "Unhandled Login packet ${packet.javaClass.simpleName}" }
             }
         }
     }
@@ -357,7 +354,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     private fun handlePlayPacket(packet: PcPacket) {
         when (packet) {
             is ClientSettingsPcPacket -> {
-                println("Client settings like locale ${packet.locale}")
+                log.info { "Client settings like locale ${packet.locale}" }
             }
             is ClientKeepAlivePcPacket -> {
 
@@ -370,7 +367,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                         brand = dataStream.readSignedString()
                     }
                     else -> {
-                        println("Unhandled packet on channel $channel with ${packet.data.size} bytes")
+                        log.warn { "Unhandled packet on channel $channel with ${packet.data.size} bytes" }
                     }
                 }
             }
@@ -401,7 +398,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 eb.typedSend("p:s:$craftyPlayerId", PlayerActionCraftyPacket(craftyAction))
             }
             else -> {
-                println("Unhandled Play packet ${packet.javaClass.simpleName}")
+                log.error { "Unhandled Play packet ${packet.javaClass.simpleName}" }
             }
         }
     }
