@@ -23,13 +23,16 @@ fun loadWorld(folder: String) : World {
             (levelCompound["SpawnZ"] as NbtInt).value.toFloat()
     )
 
-    val regions = File("$folder/region").listFiles().filter { it.path.endsWith("mca") }.map(::readRegion)
+    val regions = File("$folder/region").listFiles()
+            .filter { it.path.endsWith("mca") }
+            .map(::readRegion)
     val chunks = regions.flatten()
 
     return World(chunks, spawnPoint)
 }
 
-data class ChunkEntry(val offset: Int, val size: Int)
+private val sectorSize = 4096
+data class ChunkEntry(val offset: Int, val paddedSize: Int)
 fun readRegion(file: File) : List<CraftyChunkColumn> {
     val regionBytes = file.readBytes()
     val regionStream = MinecraftInputStream(regionBytes)
@@ -37,11 +40,11 @@ fun readRegion(file: File) : List<CraftyChunkColumn> {
         val entry = regionStream.readInt()
         val chunkOffset = entry ushr 8
         val chunkSize = entry and 0xF
-        ChunkEntry(chunkOffset * 4096, chunkSize * 4096)
-    }.filterNot { it.offset == 0 && it.size == 0 }
+        ChunkEntry(chunkOffset * sectorSize, chunkSize * sectorSize)
+    }.filterNot { it.offset == 0 && it.paddedSize == 0 }
 
     return chunkEntries.parallelStream().map {
-        val headerStream = MinecraftInputStream(regionBytes, it.offset, it.size)
+        val headerStream = MinecraftInputStream(regionBytes, it.offset, it.paddedSize)
         val chunkSize = headerStream.readInt() - 1 // - 1 because of the compressionScheme byte
         val compressionScheme = headerStream.readByte().toInt()
         val chunkStream = MinecraftInputStream(regionBytes, it.offset + 5, chunkSize)
