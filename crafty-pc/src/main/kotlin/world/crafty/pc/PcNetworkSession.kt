@@ -7,6 +7,8 @@ import io.vertx.core.net.NetSocket
 import io.vertx.ext.web.client.WebClient
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
+import org.joml.Vector3f
+import world.crafty.common.Angle256
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.PcNetworkSession.State.*
@@ -17,8 +19,7 @@ import world.crafty.common.Location
 import world.crafty.common.utils.*
 import world.crafty.common.vertx.*
 import world.crafty.mojang.MojangProfile
-import world.crafty.pc.metadata.PcEntity
-import world.crafty.pc.metadata.PcMetadataMap
+import world.crafty.pc.entity.PcEntity
 import java.io.ByteArrayInputStream
 import world.crafty.pc.world.toPcPacket
 import world.crafty.proto.CraftyChunkColumn
@@ -52,7 +53,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     
     private var ownEntityId = 0L
     private var location = Location(0f, 0f, 0f)
-    private val loadedEntities = mutableMapOf<Long, PcEntity>()
+    private val loadedEntities = mutableMapOf<Int, PcEntity>()
 
     val verifyToken = generateVerifyToken()
     var encrypted = false
@@ -272,7 +273,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                             val skinProfile = eb.typedSendAsync<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, skinReq).body()
                             val playerProps = if(skinProfile.textureProp == null) emptyList() else listOf(skinProfile.textureProp!!)
 
-                            val entity = PcEntity(packet.entityId)
+                            val entity = PcEntity(packet.entityId.toInt(), packet.location)
                             loadedEntities[entity.id] = entity
 
                             if(packet.entityId == craftyPlayerId.toLong()) // TODO: fix hack
@@ -296,7 +297,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                             send(SpawnPlayerPcPacket(
                                     entityId = packet.entityId.toInt(),
                                     uuid = packet.uuid,
-                                    location = PcLocation(packet.location),
+                                    location = packet.location,
                                     metadata = metadata
                             ))
                             delay(1000)
@@ -306,9 +307,20 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                     
                     eb.typedConsumer("p:c:$craftyPlayerId", PatchEntityCraftyPacket::class) {
                         val packet = it.body()
-                        val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
+                        val entity = loadedEntities[packet.entityId.toInt()] ?: return@typedConsumer
                         val meta = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.values)
                         send(EntityMetadataPcPacket(packet.entityId.toInt(), meta))
+                    }
+                    
+                    eb.typedConsumer("p:c:$craftyPlayerId", SetEntityLocationCraftyPacket::class) {
+                        val packet = it.body()
+                        if(packet.entityId == ownEntityId) return@typedConsumer
+                        
+                        val entity = loadedEntities[packet.entityId.toInt()] ?: return@typedConsumer
+                        
+                        entity.getMovePacketsAndClear(packet.location, packet.onGround).forEach {
+                            send(it)
+                        }
                     }
 
                     eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {
@@ -326,7 +338,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                                             )
                                     )
                             ))
-                            send(TeleportPlayerPcPacket(PcLocation(location), 0, 1))
+                            send(TeleportPlayerPcPacket(location, 0, 1))
                             delay(1000)
                             send(PlayerListItemPcPacket(
                                     action = PlayerListAction.REMOVE,
@@ -375,13 +387,25 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                 eb.typedSend("p:s:$craftyPlayerId", ChatFromClientCraftyPacket(packet.text))
             }
             is PlayerPositionPcPacket -> {
-                
+                val pos = Vector3f(packet.x.toFloat(), packet.y.toFloat(), packet.z.toFloat())
+                eb.typedSend("p:s:$craftyPlayerId", SetPlayerPosCraftyPacket(pos, packet.onGround))
             }
             is PlayerPosAndLookPcPacket -> {
-
+                val pos = Location(
+                        x = packet.x.toFloat(),
+                        y = packet.y.toFloat(),
+                        z = packet.z.toFloat(),
+                        bodyYaw = Angle256.fromDegrees(packet.yaw),
+                        headYaw = Angle256.fromDegrees(packet.yaw),
+                        headPitch = Angle256.fromDegrees(packet.pitch)
+                )
+                eb.typedSend("p:s:$craftyPlayerId", SetPlayerPosAndLookCraftyPacket(pos, packet.onGround))
             }
             is PlayerLookPcPacket -> {
-
+                val headPitch = Angle256.fromDegrees(packet.pitch)
+                val headYaw = Angle256.fromDegrees(packet.yaw)
+                val bodyYaw = headYaw
+                eb.typedSend("p:s:$craftyPlayerId", SetPlayerLookCraftyPacket(headPitch, headYaw, bodyYaw))
             }
             is EntityActionPcPacket -> {
                 val craftyAction = when(packet.action) {

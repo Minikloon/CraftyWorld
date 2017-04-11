@@ -7,14 +7,14 @@
       "Console": {
         "name": "console",
         "PatternLayout": {
-          "pattern": "%d{DATE} %c %m%n"
+          "pattern": "%p %d{DATE} %c %m%n"
         }
       },
       "File": {
         "name": "file",
         "fileName": "logs/crafty-world.log",
         "PatternLayout": {
-          "pattern": "%d{ABSOLUTE} %c %m%n"
+          "pattern": "%p %d{ABSOLUTE} %c %m%n"
         }
       }
     },

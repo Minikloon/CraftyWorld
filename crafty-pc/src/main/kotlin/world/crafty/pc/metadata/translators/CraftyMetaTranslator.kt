@@ -3,7 +3,7 @@ package world.crafty.pc.metadata.translators
 import world.crafty.common.utils.getLogger
 import world.crafty.common.utils.warn
 import world.crafty.pc.metadata.MetadataEntry
-import world.crafty.pc.metadata.PcEntity
+import world.crafty.pc.entity.PcEntity
 import world.crafty.proto.metadata.MetaField
 import world.crafty.proto.metadata.MetaValue
 

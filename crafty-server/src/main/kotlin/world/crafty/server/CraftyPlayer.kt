@@ -57,9 +57,33 @@ class CraftyPlayer(
         consume(ReadyToSpawnCraftyPacket::class) {
             val world = server.world
             eb.typedSend("p:c:$id", SpawnSelfCraftyPacket())
-            entity = world.spawn { PlayerEntity(it, entityId, this, spawnLocation) }
+            entity = world.spawn { PlayerEntity(it, entityId, spawnLocation, this) }
             world.addViewer(this)
             log.info { "Crafty spawning player $username!" }
+        }
+        
+        consume(SetPlayerPosCraftyPacket::class) {
+            val body = it.body()
+            val coords = body.coords
+            val prevLoc = entity?.location
+            val newLoc = entity?.location?.copy(x = coords.x(), y = coords.y(), z = coords.z())
+            if(prevLoc != null && newLoc != null)
+                entity?.location = newLoc
+            entity?.onGround = body.onGround
+        }
+        
+        consume(SetPlayerLookCraftyPacket::class) {
+            val body = it.body()
+            val prevLoc = entity?.location
+            val newLoc = entity?.location?.copy(bodyYaw = body.bodyYaw, headYaw = body.headYaw, headPitch = body.headPitch)
+            if(prevLoc != null && newLoc != null)
+                entity?.location = newLoc
+        }
+        
+        consume(SetPlayerPosAndLookCraftyPacket::class) {
+            val body = it.body()
+            entity?.location = body.loc
+            entity?.onGround = body.onGround
         }
         
         consume(PlayerActionCraftyPacket::class) {

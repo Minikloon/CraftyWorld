@@ -26,6 +26,10 @@ fun registerVertxCraftyCodecs(eb: EventBus) {
     eb.registerDefaultCodec<AddPlayerCraftyPacket>(AddPlayerCraftyPacket.Codec)
     eb.registerDefaultCodec<PlayerActionCraftyPacket>(PlayerActionCraftyPacket.Codec)
     eb.registerDefaultCodec<PatchEntityCraftyPacket>(PatchEntityCraftyPacket.Codec)
+    eb.registerDefaultCodec<SetPlayerLookCraftyPacket>(SetPlayerLookCraftyPacket.Codec)
+    eb.registerDefaultCodec<SetPlayerPosAndLookCraftyPacket>(SetPlayerPosAndLookCraftyPacket.Codec)
+    eb.registerDefaultCodec<SetPlayerPosCraftyPacket>(SetPlayerPosCraftyPacket.Codec)
+    eb.registerDefaultCodec<SetEntityLocationCraftyPacket>(SetEntityLocationCraftyPacket.Codec)
 }
 
 private inline fun <reified T : CraftyPacket> EventBus.registerDefaultCodec(codec: CraftyPacket.CraftyPacketCodec) {

@@ -4,7 +4,7 @@ import org.joml.Vector2f
 import org.joml.Vector3f
 import org.joml.Vector3ic
 
-class Angle256 constructor(val increment: Byte) {
+data class Angle256 constructor(val increment: Byte) {
     fun toDegrees() : Float {
         return increment / 256f * 360
     }
@@ -14,7 +14,8 @@ class Angle256 constructor(val increment: Byte) {
     }
     
     companion object {
-        val zero = fromDegrees(0f)
+        val zero: Angle256 
+            get() = fromDegrees(0f)
         
         fun fromDegrees(degrees: Float) : Angle256 {
             val increment = degrees / 360 * 256
@@ -28,12 +29,13 @@ class Angle256 constructor(val increment: Byte) {
     }
 }
 
-class Location(
+data class Location(
         val x: Float,
         val y: Float,
         val z: Float,
-        val yaw: Angle256 = Angle256.zero,
-        val pitch: Angle256 = Angle256.zero
+        val bodyYaw: Angle256 = Angle256.zero,
+        val headYaw: Angle256 = Angle256.zero,
+        val headPitch: Angle256 = Angle256.zero
 ) {
     constructor(xyz: Vector3ic) : this(xyz.x().toFloat(), xyz.y().toFloat(), xyz.z().toFloat())
 
@@ -42,18 +44,14 @@ class Location(
     }
 
     fun anglesDegreeVec2() : Vector2f {
-        return Vector2f(yaw.toDegrees(), pitch.toDegrees())
+        return Vector2f(bodyYaw.toDegrees(), headPitch.toDegrees())
     }
     
     fun add(dx: Float, dy: Float, dz: Float) : Location {
-        return Location(x + dx, y + dy, z + dz, yaw, pitch)
-    }
-    
-    fun setY(y: Float) : Location {
-        return Location(x, y, z, yaw, pitch)
+        return Location(x + dx, y + dy, z + dz, bodyYaw, headPitch)
     }
 
     override fun toString(): String {
-        return "($x, $y, $z; ${yaw.increment}, ${pitch.increment})"
+        return "($x, $y, $z; ${bodyYaw.increment}, ${headPitch.increment})"
     }
 }

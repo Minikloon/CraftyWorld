@@ -148,8 +148,8 @@ class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
         writeFloat(loc.x)
         writeFloat(loc.y)
         writeFloat(loc.z)
-        writeAngle(loc.pitch)
-        writeAngle(loc.yaw)
+        writeAngle(loc.headPitch)
+        writeAngle(loc.bodyYaw)
     }
 
     companion object {        

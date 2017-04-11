@@ -1,6 +1,7 @@
 package world.crafty.pc.metadata.translators.builtin
 
 import world.crafty.common.utils.firstByte
+import world.crafty.pc.entity.PcEntity
 import world.crafty.pc.metadata.*
 import world.crafty.pc.metadata.translators.MetaNotImplementedYet
 import world.crafty.pc.metadata.translators.PcCraftyMetaTranslator

@@ -3,7 +3,7 @@ package world.crafty.pe.metadata.translators.builtin
 import world.crafty.common.utils.firstLong
 import world.crafty.pe.metadata.MetadataEntry
 import world.crafty.pe.metadata.MetadataType
-import world.crafty.pe.metadata.PeEntity
+import world.crafty.pe.entity.PeEntity
 import world.crafty.pe.metadata.translators.MetaNotImplementedYet
 import world.crafty.pe.metadata.translators.PeCraftyMetaTranslator
 import world.crafty.pe.metadata.translators.PeCraftyMetaTranslatorGroup

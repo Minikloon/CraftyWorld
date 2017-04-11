@@ -35,7 +35,7 @@ object ServerBoundPeWrappedPackets : InboundPePacketList() {
                 ResourcePackClientResponsePePacket.Codec,
                 ChunkRadiusRequestPePacket.Codec,
                 PlayerActionPePacket.Codec,
-                SetPlayerPositionPePacket.Codec,
+                SetPlayerLocPePacket.Codec,
                 ChatPePacket.Codec
         )
     }

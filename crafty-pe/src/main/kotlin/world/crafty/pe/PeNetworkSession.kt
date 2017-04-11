@@ -8,6 +8,8 @@ import io.vertx.core.eventbus.EventBus
 import io.vertx.core.net.SocketAddress
 import io.vertx.core.net.impl.SocketAddressImpl
 import kotlinx.coroutines.experimental.launch
+import org.joml.Vector3f
+import world.crafty.common.Angle256
 import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
@@ -15,7 +17,8 @@ import world.crafty.common.utils.*
 import world.crafty.common.vertx.*
 import world.crafty.pe.jwt.payloads.CertChainLink
 import world.crafty.pe.jwt.payloads.PeClientData
-import world.crafty.pe.metadata.PeEntity
+import world.crafty.pe.entity.PeEntity
+import world.crafty.pe.entity.PePlayerEntity
 import world.crafty.pe.metadata.PeMetadataMap
 import world.crafty.pe.proto.*
 import world.crafty.pe.proto.packets.client.*
@@ -25,6 +28,7 @@ import world.crafty.pe.raknet.*
 import world.crafty.pe.raknet.session.RakNetworkSession
 import world.crafty.pe.world.toPePacket
 import world.crafty.proto.CraftyChunkColumn
+import world.crafty.proto.CraftyPacket
 import world.crafty.proto.CraftySkin
 import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.packets.client.*
@@ -66,7 +70,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     private val packetSendQueue = mutableListOf<PePacket>()
     
     private var ownEntityId: Long = 0
-    private var location = Location(0f, 0f, 0f)
+    private var clientLoc = PeLocation(0f, 0f, 0f)
     private val loadedEntities = mutableMapOf<Long, PeEntity>()
     
     private lateinit var eb: EventBus
@@ -103,7 +107,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     }
     
     private suspend fun handlePeMessage(message: PePacket) {
-        if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerPositionPePacket && message !is ConnectedPingPePacket)
+        if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerLocPePacket && message !is ConnectedPingPePacket)
             log.trace { "HANDLE ${message::class.simpleName}" }
         when(message) {
             is ConnectedPingPePacket -> {
@@ -215,7 +219,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
 
                     val prespawn = craftyResponse.prespawn!!
                     ownEntityId = prespawn.entityId
-                    location = prespawn.spawnLocation
+                    clientLoc = PeLocation(prespawn.spawnLocation)
                     queueSend(StartGamePePacket(
                             entityId = prespawn.entityId,
                             runtimeEntityId = 0,
@@ -269,7 +273,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 eb.typedConsumer("p:c:$craftyPlayerId", AddPlayerCraftyPacket::class) {
                     val packet = it.body()
 
-                    val entity = PeEntity(packet.entityId)
+                    val entity = PePlayerEntity(packet.entityId)
                     loadedEntities[entity.id] = entity
                     
                     if(packet.craftyId == craftyPlayerId)
@@ -299,9 +303,9 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                             speedX = 0f,
                             speedY = 0f,
                             speedZ = 0f,
-                            headPitch = packet.location.pitch.toDegrees(),
-                            headYaw = packet.location.yaw.toDegrees(),
-                            bodyYaw = packet.location.yaw.toDegrees(),
+                            headPitch = packet.location.headPitch.toDegrees(),
+                            headYaw = packet.location.bodyYaw.toDegrees(),
+                            bodyYaw = packet.location.bodyYaw.toDegrees(),
                             itemInHand = PeItem(0, 0, 0, null),
                             metadata = metadata
                     ))
@@ -315,12 +319,21 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     queueSend(EntityMetadataPePacket(packet.entityId, meta))
                 }
                 
+                eb.typedConsumer("p:c:$craftyPlayerId", SetEntityLocationCraftyPacket::class) {
+                    val packet = it.body()
+                    if(packet.entityId == ownEntityId) return@typedConsumer
+                    
+                    val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
+                    
+                    queueSend(entity.getSetLocationPacket(packet.location.toPe(), packet.onGround))
+                }
+                
                 eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {
                     queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
                 }
                 
                 val cache = server.getWorldCache(worldServer)
-                eb.typedSend<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId", ChunksRadiusRequestCraftyPacket(location.positionVec3(), 0, chunkRadius)) {
+                eb.typedSend<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId", ChunksRadiusRequestCraftyPacket(clientLoc.positionVec3(), 0, chunkRadius)) {
                     val response = it.result().body()
                     response.chunkColumns.forEach { setColumn ->
                         val chunkPacket = when(setColumn.cacheStrategy) {
@@ -357,8 +370,28 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 }
                 eb.typedSend("p:s:$craftyPlayerId", PlayerActionCraftyPacket(craftyAction))
             }
-            is SetPlayerPositionPePacket -> {
+            is SetPlayerLocPePacket -> {
+                if(message.mode != MoveMode.INTERPOLATE) {
+                    log.warn { "Received PE move of mode ${message.mode} from ${loginExtraData?.displayName}" }
+                    return
+                }
+                val newLoc = message.loc.copy(y = message.loc.y - PePlayerEntity.eyeHeight)
                 
+                val posChanged = newLoc.x != clientLoc.x || newLoc.y != clientLoc.y || newLoc.z != clientLoc.z
+                val lookChanged = newLoc.bodyYaw != clientLoc.bodyYaw || newLoc.headYaw != clientLoc.headYaw || newLoc.headPitch != clientLoc.headPitch
+                
+                val packet: CraftyPacket = if(!posChanged && !lookChanged) { return }
+                else if(posChanged && !lookChanged) {
+                    SetPlayerPosCraftyPacket(Vector3f(newLoc.x, newLoc.y, newLoc.z), message.onGround)                   
+                } else if(posChanged && lookChanged) {
+                    SetPlayerPosAndLookCraftyPacket(newLoc.toLocation(), message.onGround)
+                } else {
+                    SetPlayerLookCraftyPacket(headPitch = newLoc.headPitch, headYaw = newLoc.headYaw, bodyYaw = newLoc.bodyYaw)
+                }
+
+                eb.typedSend("p:s:$craftyPlayerId", packet)
+                
+                clientLoc = newLoc
             }
             is ChatPePacket -> {
                 eb.typedSend("p:s:$craftyPlayerId", ChatFromClientCraftyPacket(message.text))

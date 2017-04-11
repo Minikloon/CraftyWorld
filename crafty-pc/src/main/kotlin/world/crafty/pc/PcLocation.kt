@@ -5,42 +5,43 @@ import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 
-class PcLocation(
-        val x: Double,
-        val y: Double,
-        val z: Double,
-        val yaw: Angle256 = Angle256.zero,
-        val pitch: Angle256 = Angle256.zero
-) {
-    constructor(loc: Location) : this(loc.x.toDouble(), loc.y.toDouble(), loc.z.toDouble(), loc.yaw, loc.pitch)
-    
-    fun toLocation() : Location {
-        return Location(x.toFloat(), y.toFloat(), z.toFloat(), yaw, pitch)
-    }
-}
-
-fun MinecraftOutputStream.writePcLocation(loc: PcLocation) {
-    writeDouble(loc.x)
-    writeDouble(loc.y)
-    writeDouble(loc.z)
-    writeAngle(loc.yaw)
-    writeAngle(loc.pitch)
-}
-
 fun MinecraftOutputStream.writePcLocation(loc: Location) {
     writeDouble(loc.x.toDouble())
     writeDouble(loc.y.toDouble())
     writeDouble(loc.z.toDouble())
-    writeAngle(loc.yaw)
-    writeAngle(loc.pitch)
+    writeAngle(loc.bodyYaw)
+    writeAngle(loc.headPitch)
 }
 
-fun MinecraftInputStream.readPcLocation() : PcLocation {
-    return PcLocation(
-            x = readDouble(),
-            y = readDouble(),
-            z = readDouble(),
-            yaw = readAngle(),
-            pitch = readAngle()
+fun MinecraftInputStream.readPcLocation() : Location {
+    return Location(
+            x = readDouble().toFloat(),
+            y = readDouble().toFloat(),
+            z = readDouble().toFloat(),
+            bodyYaw = readAngle(),
+            headPitch = readAngle()
+    )
+}
+
+fun MinecraftOutputStream.writePcLocationFloatAngles(loc: Location) {
+    writeDouble(loc.x.toDouble())
+    writeDouble(loc.y.toDouble())
+    writeDouble(loc.z.toDouble())
+    writeFloat(loc.bodyYaw.toDegrees())
+    writeFloat(loc.headPitch.toDegrees())
+}
+
+fun MinecraftInputStream.readPcLocationFloatAngles() : Location {
+    val x = readDouble().toFloat()
+    val y = readDouble().toFloat()
+    val z = readDouble().toFloat()
+    val bodyYaw = Angle256.fromDegrees(readFloat())
+    return Location(
+            x = x,
+            y = y,
+            z = z,
+            bodyYaw = bodyYaw,
+            headYaw = bodyYaw.copy(),
+            headPitch = Angle256.fromDegrees(readFloat())
     )
 }

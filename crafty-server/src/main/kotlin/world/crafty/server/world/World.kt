@@ -37,11 +37,15 @@ class World(val chunks: List<CraftyChunkColumn>, val spawn: Location) {
             return
         
         entities.forEach {
+            val pos = it.getPositionPacketIfMovedAndReset()
+            if(pos != null)
+                sendAllViewers(pos)
+            
             val changes = it.getMetaChangesAndClear()
-            if(changes.isEmpty())
-                return@forEach
-            val patch = PatchEntityCraftyPacket(it.id, changes)
-            sendAllViewers(patch)
+            if(!changes.isEmpty()) {
+                val patch = PatchEntityCraftyPacket(it.id, changes)
+                sendAllViewers(patch)
+            }
         }
     }
     

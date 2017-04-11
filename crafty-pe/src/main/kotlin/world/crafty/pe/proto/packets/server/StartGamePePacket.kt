@@ -1,5 +1,6 @@
 package world.crafty.pe.proto.packets.server
 
+import world.crafty.common.Angle256
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pe.PeLocation
@@ -60,7 +61,7 @@ class StartGamePePacket(
             return StartGamePePacket(
                     entityId = stream.readZigzagVarLong(),
                     runtimeEntityId = stream.readUnsignedVarLong(),
-                    spawn = PeLocation(stream.readVector3fLe(), stream.readVector2fLe()),
+                    spawn = PeLocation(stream.readVector3fLe(), bodyYaw = Angle256.fromDegrees(stream.readFloatLe()), pitch = Angle256.fromDegrees(stream.readFloatLe())),
                     seed = stream.readZigzagVarInt(),
                     dimension = stream.readZigzagVarInt(),
                     generator = stream.readZigzagVarInt(),

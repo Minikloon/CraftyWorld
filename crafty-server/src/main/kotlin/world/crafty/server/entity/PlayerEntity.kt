@@ -11,9 +11,9 @@ import world.crafty.server.world.World
 class PlayerEntity(
         world: World,
         entityId: Long,
-        val craftyPlayer: CraftyPlayer,
-        var location: Location
-) : Entity(world, entityId) {
+        location: Location,
+        val craftyPlayer: CraftyPlayer
+) : Entity(world, entityId, location) {
     val metaEntity = EntityMeta()
     val metaLiving = LivingMeta()
     val metaPlayer = PlayerMeta()

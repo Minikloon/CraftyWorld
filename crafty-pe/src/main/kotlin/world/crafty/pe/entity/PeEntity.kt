@@ -1,9 +1,13 @@
-package world.crafty.pe.metadata
+package world.crafty.pe.entity
 
+import world.crafty.pe.PeLocation
+import world.crafty.pe.metadata.PeMetadataMap
 import world.crafty.pe.metadata.translators.MetaTranslatorRegistry
+import world.crafty.pe.proto.PePacket
+import world.crafty.pe.proto.packets.server.SetEntityLocPePacket
 import world.crafty.proto.metadata.MetaValue
 
-class PeEntity(val id: Long) {
+open class PeEntity(val id: Long) {
     val metaCache = mutableMapOf<Int, Any>()
 
     fun metaFromCrafty(translators: MetaTranslatorRegistry, meta: List<MetaValue>) : PeMetadataMap {
@@ -17,5 +21,9 @@ class PeEntity(val id: Long) {
             }
         }
         return map
+    }
+    
+    open fun getSetLocationPacket(loc: PeLocation, onGround: Boolean) : PePacket {
+        return SetEntityLocPePacket(id, loc)
     }
 }

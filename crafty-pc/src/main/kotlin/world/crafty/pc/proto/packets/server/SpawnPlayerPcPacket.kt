@@ -1,8 +1,8 @@
 package world.crafty.pc.proto.packets.server
 
+import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
-import world.crafty.pc.PcLocation
 import world.crafty.pc.metadata.PcMetadataMap
 import world.crafty.pc.proto.PcPacket
 import world.crafty.pc.readPcLocation
@@ -12,7 +12,7 @@ import java.util.*
 class SpawnPlayerPcPacket(
         val entityId: Int,
         val uuid: UUID,
-        val location: PcLocation,
+        val location: Location,
         val metadata: PcMetadataMap
 ) : PcPacket() {
     override val id = Codec.id
