@@ -69,9 +69,9 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     
     private val packetSendQueue = mutableListOf<PePacket>()
     
-    private var ownEntityId: Long = 0
+    private var ownEntityId: Int = 0
+    private val loadedEntities = mutableMapOf<Int, PeEntity>()
     private var clientLoc = PeLocation(0f, 0f, 0f)
-    private val loadedEntities = mutableMapOf<Long, PeEntity>()
     
     private lateinit var eb: EventBus
 
@@ -221,7 +221,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     ownEntityId = prespawn.entityId
                     clientLoc = PeLocation(prespawn.spawnLocation)
                     queueSend(StartGamePePacket(
-                            entityId = prespawn.entityId,
+                            entityId = ownEntityId.toLong(),
                             runtimeEntityId = 0,
                             spawn = PeLocation(prespawn.spawnLocation),
                             seed = 12345,
@@ -273,8 +273,8 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 eb.typedConsumer("p:c:$craftyPlayerId", AddPlayerCraftyPacket::class) {
                     val packet = it.body()
 
-                    val entity = PePlayerEntity(packet.entityId)
-                    loadedEntities[entity.id] = entity
+                    val entity = PePlayerEntity(packet.entityId.toLong())
+                    loadedEntities[packet.entityId] = entity
                     
                     if(packet.craftyId == craftyPlayerId)
                         return@typedConsumer
@@ -286,7 +286,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                             items = listOf(
                                     PlayerListPeAdd(
                                             uuid = packet.uuid,
-                                            entityId = packet.entityId,
+                                            entityId = entity.id,
                                             name = packet.username,
                                             skin = PeSkin.fromCrafty(packet.skin)
                                     )
@@ -295,8 +295,8 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     queueSend(AddPlayerPePacket(
                             uuid = packet.uuid,
                             username = packet.username,
-                            entityId = packet.entityId,
-                            runtimeEntityId = packet.entityId,
+                            entityId = entity.id,
+                            runtimeEntityId = entity.id,
                             x = packet.location.x,
                             y = packet.location.y,
                             z = packet.location.z,
@@ -316,7 +316,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                     val packet = it.body()
                     val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
                     val meta = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.values)
-                    queueSend(EntityMetadataPePacket(packet.entityId, meta))
+                    queueSend(EntityMetadataPePacket(entity.id, meta))
                 }
                 
                 eb.typedConsumer("p:c:$craftyPlayerId", SetEntityLocationCraftyPacket::class) {

@@ -12,7 +12,7 @@ class AddPlayerCraftyPacket(
         val craftyId: Int,
         val uuid: UUID,
         val username: String,
-        val entityId: Long,
+        val entityId: Int,
         val location: Location,
         val skin: CraftySkin,
         val meta: List<MetaValue>
@@ -24,7 +24,7 @@ class AddPlayerCraftyPacket(
             stream.writeUnsignedVarInt(obj.craftyId)
             stream.writeUuid(obj.uuid)
             stream.writeUnsignedString(obj.username)
-            stream.writeUnsignedVarLong(obj.entityId)
+            stream.writeUnsignedVarInt(obj.entityId)
             stream.writeLocation(obj.location)
             CraftySkin.Codec.serialize(obj.skin, stream)
             MetaValue.serialize(obj.meta, stream)
@@ -34,7 +34,7 @@ class AddPlayerCraftyPacket(
                     craftyId = stream.readUnsignedVarInt(),
                     uuid = stream.readUuid(),
                     username = stream.readUnsignedString(),
-                    entityId = stream.readUnsignedVarLong(),
+                    entityId = stream.readUnsignedVarInt(),
                     location = stream.readLocation(),
                     skin = CraftySkin.Codec.deserialize(stream),
                     meta = MetaValue.deserialize(stream)

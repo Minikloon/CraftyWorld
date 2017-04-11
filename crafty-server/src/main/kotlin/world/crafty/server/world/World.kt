@@ -11,17 +11,17 @@ import world.crafty.server.utils.broadcast
 class World(val chunks: List<CraftyChunkColumn>, val spawn: Location) {
     private val viewers = mutableSetOf<CraftyPlayer>()
     
-    private val entitiesById = mutableMapOf<Long, Entity>()
-    private var entityId = 0L
+    private val entitiesById = mutableMapOf<Int, Entity>()
     val entities: Collection<Entity>
         get() = entitiesById.values
-    
-    fun nextEntityId() : Long {
-        return ++entityId
+
+    private var entityIdCounter = 0
+    fun nextEntityId() : Int {
+        return ++entityIdCounter
     }
     
     fun <T: Entity> spawn(spawner: (world: World) -> T) : T {
-        val id = ++entityId
+        val id = ++entityIdCounter
         val entity = spawner(this)
         
         entity.createSpawnPackets().broadcast(viewers)
@@ -63,7 +63,7 @@ class World(val chunks: List<CraftyChunkColumn>, val spawn: Location) {
         }
     }
     
-    fun getEntity(id: Long) : Entity? {
+    fun getEntity(id: Int) : Entity? {
         return entitiesById[id]
     }
 }

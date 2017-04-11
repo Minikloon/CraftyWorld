@@ -51,7 +51,7 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
     
     private var craftyPlayerId = 0
     
-    private var ownEntityId = 0L
+    private var ownEntityId = 0
     private var location = Location(0f, 0f, 0f)
     private val loadedEntities = mutableMapOf<Int, PcEntity>()
 
@@ -273,10 +273,10 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                             val skinProfile = eb.typedSendAsync<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, skinReq).body()
                             val playerProps = if(skinProfile.textureProp == null) emptyList() else listOf(skinProfile.textureProp!!)
 
-                            val entity = PcEntity(packet.entityId.toInt(), packet.location)
+                            val entity = PcEntity(packet.entityId, packet.location)
                             loadedEntities[entity.id] = entity
 
-                            if(packet.entityId == craftyPlayerId.toLong()) // TODO: fix hack
+                            if(packet.craftyId == craftyPlayerId) // TODO: fix hack
                                 return@launch
 
                             val metadata = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.meta)
@@ -295,10 +295,14 @@ class PcNetworkSession(val server: PcConnectionServer, val worldServer: String, 
                                     )
                             ))
                             send(SpawnPlayerPcPacket(
-                                    entityId = packet.entityId.toInt(),
+                                    entityId = packet.entityId,
                                     uuid = packet.uuid,
                                     location = packet.location,
                                     metadata = metadata
+                            ))
+                            send(SetEntityHeadLookPcPacket(
+                                    entityId = packet.entityId.toInt(),
+                                    headYaw = packet.location.headYaw
                             ))
                             delay(1000)
                             send(PlayerListItemPcPacket(PlayerListAction.REMOVE, listOf(PlayerListPcRemove(packet.uuid))))

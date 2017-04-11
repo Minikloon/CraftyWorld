@@ -7,7 +7,7 @@ import world.crafty.proto.metadata.MetaValue
 import world.crafty.proto.packets.server.SetEntityLocationCraftyPacket
 import world.crafty.server.world.World
 
-abstract class Entity(val world: World, val id: Long = world.nextEntityId(), var location: Location) {
+abstract class Entity(val world: World, val id: Int = world.nextEntityId(), var location: Location) {
     var onGround = true
     
     abstract fun createSpawnPackets() : Collection<CraftyPacket>

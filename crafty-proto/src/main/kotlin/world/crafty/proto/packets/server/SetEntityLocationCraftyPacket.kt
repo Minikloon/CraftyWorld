@@ -6,7 +6,7 @@ import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.proto.CraftyPacket
 
 class SetEntityLocationCraftyPacket(
-        val entityId: Long,
+        val entityId: Int,
         val location: Location,
         val onGround: Boolean
 ) : CraftyPacket() {
@@ -14,13 +14,13 @@ class SetEntityLocationCraftyPacket(
     object Codec : CraftyPacketCodec() {
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetEntityLocationCraftyPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarLong(obj.entityId)
+            stream.writeUnsignedVarInt(obj.entityId)
             stream.writeLocation(obj.location)
             stream.writeBoolean(obj.onGround)
         }
         override fun deserialize(stream: MinecraftInputStream): CraftyPacket {
             return SetEntityLocationCraftyPacket(
-                    entityId = stream.readUnsignedVarLong(),
+                    entityId = stream.readUnsignedVarInt(),
                     location = stream.readLocation(),
                     onGround = stream.readBoolean()
             )

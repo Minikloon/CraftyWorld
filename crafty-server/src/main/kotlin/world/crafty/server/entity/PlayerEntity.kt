@@ -10,7 +10,7 @@ import world.crafty.server.world.World
 
 class PlayerEntity(
         world: World,
-        entityId: Long,
+        entityId: Int,
         location: Location,
         val craftyPlayer: CraftyPlayer
 ) : Entity(world, entityId, location) {
