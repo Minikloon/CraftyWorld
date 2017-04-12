@@ -1,7 +1,6 @@
 package world.crafty.pc.metadata.translators
 
-import world.crafty.common.utils.getLogger
-import world.crafty.common.utils.warn
+import world.crafty.common.utils.logger
 import world.crafty.pc.metadata.MetadataEntry
 import world.crafty.pc.entity.PcEntity
 import world.crafty.proto.metadata.MetaField
@@ -21,7 +20,7 @@ object MetaNotImplementedYet : PcCraftyMetaTranslator {
     var called = false
     override fun fromCrafty(entity: PcEntity, meta: MetaValue): Map<Int, MetadataEntry>? {
         if(!called) {
-            getLogger("pc-metadata").warn { "PC meta translator for crafty field ${meta.fieldId} isn't implemented yet! GET ON IT!" }
+            logger("pc-metadata").warn { "PC meta translator for crafty field ${meta.fieldId} isn't implemented yet! GET ON IT!" }
             called = true
         }
         return null

@@ -1,19 +1,18 @@
 package world.crafty.pe.raknet.session
 
 import io.vertx.core.Vertx
-import io.vertx.core.buffer.Buffer
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.common.utils.EvictingQueue
 import world.crafty.common.utils.average
 import world.crafty.common.kotlin.firstOrCompute
-import world.crafty.common.utils.getLogger
+import world.crafty.common.utils.logger
 import world.crafty.pe.raknet.*
 import java.io.ByteArrayOutputStream
 import java.time.Duration
 import java.time.Instant
 import java.util.*
 
-private val log = getLogger<RakSender>()
+private val log = logger<RakSender>()
 class RakSender(val session: RakNetworkSession) {
     private var datagramSeqNo: Int = 0
     private var messageSeqNo: Int = 0

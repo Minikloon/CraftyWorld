@@ -4,6 +4,7 @@ import io.vertx.core.AsyncResult
 import io.vertx.core.Handler
 import io.vertx.core.eventbus.EventBus
 import io.vertx.core.eventbus.Message
+import io.vertx.core.eventbus.MessageConsumer
 import kotlin.reflect.KClass
 
 /* TODO: Use this, can't atm because of a bug in Kotlin <= 1.1.1
@@ -16,9 +17,9 @@ inline fun <reified T> EventBus.typedConsumer(prefix: String = "", crossinline h
 */
 
 @Deprecated("Use reified version")
-fun <T: Any> EventBus.typedConsumer(prefix: String = "", clazz: KClass<T>, handler: (Message<T>) -> Unit) {
+fun <T: Any> EventBus.typedConsumer(prefix: String = "", clazz: KClass<T>, handler: (Message<T>) -> Unit) : MessageConsumer<T> {
     val address = "$prefix:${clazz.java.simpleName}"
-    consumer<T>(address) { handler(it) }
+    return consumer<T>(address) { handler(it) }
 }
 
 fun EventBus.typedPublish(prefix: String = "", obj: Any) {

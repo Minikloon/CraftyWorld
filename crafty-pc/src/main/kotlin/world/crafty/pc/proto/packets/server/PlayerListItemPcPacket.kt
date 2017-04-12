@@ -98,7 +98,7 @@ class PlayerListPcAdd(
                     },
                     gamemode = stream.readSignedVarInt(),
                     ping = stream.readSignedVarInt(),
-                    displayName = if (stream.readBoolean()) stream.readJson(McChat::class.java) else null
+                    displayName = if (stream.readBoolean()) stream.readJson(McChat::class) else null
             )
         }
     }

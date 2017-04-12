@@ -49,7 +49,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-private val log = getLogger<PeNetworkSession>()
+private val log = logger<PeNetworkSession>()
 class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, socket: DatagramSocket, address: SocketAddress) : RakNetworkSession(socket, address) {
     private var loggedIn = false
     var loginExtraData: LoginExtraData? = null // TODO: split the session by login stages to avoid these shits

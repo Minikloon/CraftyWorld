@@ -29,14 +29,6 @@ class MojangClient(vertx: Vertx) {
     val authenticated: Boolean
         get() { return accessToken != null }
 
-    fun getServerIdHash(sessionId: String, sharedSecret: SecretKeySpec, pubKey: ByteArray) : String {
-        val serverIdDigest = MessageDigest.getInstance("SHA-1")
-        serverIdDigest.update(sessionId.toByteArray())
-        serverIdDigest.update(sharedSecret.encoded)
-        serverIdDigest.update(pubKey)
-        return BigInteger(serverIdDigest.digest()).toString(16)
-    }
-
     suspend fun checkHasJoinedAsync(username: String, serverId: String) : MojangProfile {
         val response = vxHttp {
             https.get(443, sessionServer, "/session/minecraft/hasJoined?username=$username&serverId=$serverId")
@@ -114,5 +106,13 @@ class MojangClient(vertx: Vertx) {
     
     companion object {
         val requestsPerMinute = 60
+
+        fun getServerIdHash(sessionId: Int, sharedSecret: SecretKeySpec, pubKey: ByteArray) : String {
+            val serverIdDigest = MessageDigest.getInstance("SHA-1")
+            serverIdDigest.update("$sessionId".toByteArray())
+            serverIdDigest.update(sharedSecret.encoded)
+            serverIdDigest.update(pubKey)
+            return BigInteger(serverIdDigest.digest()).toString(16)
+        }
     }
 }

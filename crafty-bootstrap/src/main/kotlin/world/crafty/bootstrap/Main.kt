@@ -1,8 +1,7 @@
 package world.crafty.bootstrap
 
 import io.vertx.core.Vertx
-import world.crafty.common.utils.getLogger
-import world.crafty.common.utils.info
+import world.crafty.common.utils.logger
 import world.crafty.server.world.anvil.loadWorld
 import world.crafty.pc.PcConnectionServer
 import world.crafty.server.world.World
@@ -11,7 +10,7 @@ import world.crafty.server.CraftyServer
 import world.crafty.skinpool.CraftySkinPoolServer
 import kotlin.system.measureTimeMillis
 
-private val log = getLogger("crafty-bootstrap")
+private val log = logger("crafty-bootstrap")
 fun main(args: Array<String>) {
     writeLogo()
     bootstrapLogging()

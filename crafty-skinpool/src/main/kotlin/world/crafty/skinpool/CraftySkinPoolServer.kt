@@ -20,7 +20,7 @@ import java.nio.file.Paths
 import java.util.*
 import javax.imageio.ImageIO
 
-private val log = getLogger<CraftySkinPoolServer>()
+private val log = logger<CraftySkinPoolServer>()
 class CraftySkinPoolServer private constructor(
         private val accounts: List<AccountCredentials>,
         private val hashProfileRepo: FileHashProfileRepo

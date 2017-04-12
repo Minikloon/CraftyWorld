@@ -3,35 +3,46 @@ package world.crafty.common.utils
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-inline fun <reified T> getLogger() : Logger {
-    return LoggerFactory.getLogger(T::class.java)
+inline fun <reified T> logger() : KotlinLoggerWrapper {
+    return KotlinLoggerWrapper(LoggerFactory.getLogger(T::class.java))
 }
 
-fun getLogger(name: String) : Logger {
-    return LoggerFactory.getLogger(name)
+inline fun <reified T: Any> logger(obj: T) : KotlinLoggerWrapper {
+    return KotlinLoggerWrapper(LoggerFactory.getLogger(T::class.java))
 }
 
-inline fun Logger.trace(crossinline msg: () -> String) {
-    if(isTraceEnabled)
-        trace(msg())
+fun logger(name: String) : KotlinLoggerWrapper {
+    return KotlinLoggerWrapper(LoggerFactory.getLogger(name))
 }
 
-inline fun Logger.debug(crossinline msg: () -> String) {
-    if(isDebugEnabled)
-        trace(msg())
-}
+class KotlinLoggerWrapper(val logger: Logger) : Logger by logger {
+    inline fun trace(crossinline msg: () -> String) {
+        if(logger.isTraceEnabled)
+            logger.trace(msg())
+    }
 
-inline fun Logger.info(crossinline msg: () -> String) {
-    if(isInfoEnabled)
-        info(msg())
-}
+    inline fun debug(crossinline msg: () -> String) {
+        if(logger.isDebugEnabled)
+            logger.trace(msg())
+    }
 
-inline fun Logger.warn(crossinline msg: () -> String) {
-    if(isWarnEnabled)
-        warn(msg())
-}
+    inline fun info(crossinline msg: () -> String) {
+        if(logger.isInfoEnabled)
+            logger.info(msg())
+    }
 
-inline fun Logger.error(crossinline msg: () -> String) {
-    if(isErrorEnabled)
-        error(msg())
+    inline fun warn(crossinline msg: () -> String) {
+        if(logger.isWarnEnabled)
+            logger.warn(msg())
+    }
+
+    inline fun error(crossinline msg: () -> String) {
+        if(logger.isErrorEnabled)
+            logger.error(msg())
+    }
+    
+    inline fun error(e: Throwable, crossinline msg: () -> String) {
+        if(logger.isErrorEnabled)
+            logger.error(msg(), e)
+    }
 }

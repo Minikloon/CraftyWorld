@@ -17,6 +17,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.InetAddress
 import java.util.*
+import kotlin.reflect.KClass
 
 class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
     constructor(bytes: ByteArray) : this(ByteArrayInputStream(bytes))
@@ -121,9 +122,9 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         return String(bytes)
     }
 
-    fun <T> readJson(clazz: Class<T>) : T {
+    fun <T: Any> readJson(clazz: KClass<T>) : T {
         val json = readSignedString()
-        return Json.decodeValue(json, clazz)
+        return Json.decodeValue(json, clazz.java)
     }
 
     fun readBlockLocation() : Vector3ic {

@@ -3,8 +3,7 @@ package world.crafty.server
 import io.vertx.core.eventbus.EventBus
 import io.vertx.core.eventbus.Message
 import world.crafty.common.Location
-import world.crafty.common.utils.getLogger
-import world.crafty.common.utils.info
+import world.crafty.common.utils.logger
 import world.crafty.common.vertx.typedConsumer
 import world.crafty.common.vertx.typedSend
 import world.crafty.proto.CraftyPacket
@@ -16,7 +15,7 @@ import world.crafty.server.entity.PlayerEntity
 import java.util.*
 import kotlin.reflect.KClass
 
-private val log = getLogger<CraftyPlayer>()
+private val log = logger<CraftyPlayer>()
 class CraftyPlayer(
         private val server: CraftyServer,
         private val eb: EventBus,

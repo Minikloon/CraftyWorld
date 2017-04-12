@@ -1,8 +1,7 @@
 package world.crafty.server
 
 import io.vertx.core.AbstractVerticle
-import world.crafty.common.utils.getLogger
-import world.crafty.common.utils.info
+import world.crafty.common.utils.logger
 import world.crafty.common.vertx.typedSend
 import world.crafty.proto.GameMode
 import world.crafty.proto.packets.client.JoinRequestCraftyPacket
@@ -13,7 +12,7 @@ import world.crafty.proto.packets.server.JoinResponseCraftyPacket
 import world.crafty.proto.packets.server.PreSpawnCraftyPacket
 import world.crafty.server.world.World
 
-private val log = getLogger<CraftyServer>()
+private val log = logger<CraftyServer>()
 class CraftyServer(val address: String, val world: World) : AbstractVerticle() {
     private var playerIdCounter = 0
     private val playersById = mutableMapOf<Int, CraftyPlayer>()

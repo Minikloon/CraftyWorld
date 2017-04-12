@@ -4,11 +4,11 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.core.net.NetServer
 import io.vertx.core.net.NetSocket
 import world.crafty.common.serialization.MinecraftOutputStream
-import world.crafty.common.utils.getLogger
-import world.crafty.common.utils.info
+import world.crafty.common.utils.logger
 import world.crafty.mojang.MojangClient
 import world.crafty.pc.metadata.translators.MetaTranslatorRegistry
 import world.crafty.pc.metadata.translators.registerBuiltInPcTranslators
+import world.crafty.pc.proto.LengthPrefixedHandler
 import world.crafty.pc.proto.packets.server.ServerKeepAlivePcPacket
 import world.crafty.pc.proto.PrecompressedPayload
 import world.crafty.proto.ConcurrentColumnsCache
@@ -19,7 +19,7 @@ import world.crafty.skinpool.protocol.registerVertxSkinPoolCodecs
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 
-private val log = getLogger<PcConnectionServer>()
+private val log = logger<PcConnectionServer>()
 class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var server: NetServer
     private val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
@@ -31,6 +31,7 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
     val decipher: Cipher
     val x509PubKey: ByteArray
     val encodedBrand: ByteArray
+    var sessionIdCounter = 0
 
     init {
         val rsaKey = generateKeyPair()
@@ -53,19 +54,19 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
         mojang = MojangClient(vertx)
 
         server = vertx.createNetServer()
-        server.connectHandler {
-            val session = PcNetworkSession(this, worldServer, it)
-            sessions[it] = session
-            it.handler { session.receive(it) }
-            log.info { "Received PC connection from ${it.remoteAddress()}" }
-        }
-        server.listen(port)
-
-        vertx.setPeriodic(1000) {
-            sessions.values.filter { it.state == PcNetworkSession.State.PLAY }.forEach { session ->
-                session.send(ServerKeepAlivePcPacket(0))
+        server.connectHandler { socket ->
+            log.info { "PC connection from ${socket.remoteAddress()}" }
+            val session = PcNetworkSession(sessionIdCounter++, this, worldServer, socket)
+            sessions[socket] = session
+            socket.handler {
+                session.receive(it)
+            }
+            socket.endHandler { 
+                sessions.remove(socket)
+                session.close()
             }
         }
+        server.listen(port)
 
         vertx.setPeriodic(1000) {
             val toRemove = sessions.filter { it.value.lastUpdate.elapsed.seconds > 3 }

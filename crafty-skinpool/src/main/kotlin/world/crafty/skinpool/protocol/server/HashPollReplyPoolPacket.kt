@@ -22,7 +22,7 @@ class HashPollReplyPoolPacket(
             return HashPollReplyPoolPacket(
                     hash = stream.readLong(),
                     hasProfile = stream.readBoolean(),
-                    textureProp = if(stream.readBoolean()) stream.readJson(ProfileProperty::class.java) else null
+                    textureProp = if(stream.readBoolean()) stream.readJson(ProfileProperty::class) else null
             )
         }
     }

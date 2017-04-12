@@ -17,7 +17,7 @@ internal class SaveProfilePoolPacket(
         override fun deserialize(stream: MinecraftInputStream): SaveProfilePoolPacket {
             return SaveProfilePoolPacket(
                     hash = stream.readLong(),
-                    textureProperty = stream.readJson(ProfileProperty::class.java)
+                    textureProperty = stream.readJson(ProfileProperty::class)
             )
         }
     }
