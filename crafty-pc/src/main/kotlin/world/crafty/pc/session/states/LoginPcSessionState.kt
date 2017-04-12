@@ -36,11 +36,6 @@ import javax.crypto.spec.SecretKeySpec
 
 abstract class LoginStage(session: PcNetworkSession) : PcSessionState(session) {
     override val packetList = ServerBoundPcLoginPackets
-    
-    fun illegalPacket(packet: PcPacket) {
-        logger(this).warn { "${session.address} sent an unexpected packet of type ${packet::class.simpleName} during login!" }
-        session.close()
-    }
 }
 
 class FirstPacketLoginStage(session: PcNetworkSession) : LoginStage(session) {
@@ -52,7 +47,7 @@ class FirstPacketLoginStage(session: PcNetworkSession) : LoginStage(session) {
                 session.switchState(EncryptionLoginStage(session, username))
             }
             else -> {
-                illegalPacket(packet)
+                unexpectedPacket(packet)
             }
         }
     }
@@ -85,7 +80,7 @@ class EncryptionLoginStage(
                 session.switchState(CompressionLoginStage(session, sharedSecret, username))
             }
             else -> {
-                illegalPacket(packet)
+                unexpectedPacket(packet)
             }
         }
     }
@@ -104,7 +99,7 @@ class CompressionLoginStage(
     }
 
     suspend override fun handle(packet: PcPacket) {
-        illegalPacket(packet)
+        unexpectedPacket(packet)
     }
 }
 
@@ -120,7 +115,7 @@ class MojangCheckLoginStage(
     }
 
     suspend override fun handle(packet: PcPacket) {
-        illegalPacket(packet)
+        unexpectedPacket(packet)
     }
 }
 
@@ -166,6 +161,6 @@ class CraftyLoginStage(
     }
 
     suspend override fun handle(packet: PcPacket) {
-        illegalPacket(packet)
+        unexpectedPacket(packet)
     }
 }

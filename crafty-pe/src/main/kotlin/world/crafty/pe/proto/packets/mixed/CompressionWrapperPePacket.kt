@@ -8,7 +8,6 @@ import world.crafty.common.utils.decompressed
 import world.crafty.common.utils.toHexStr
 import world.crafty.pe.proto.PePacket
 import world.crafty.pe.proto.ServerBoundPeWrappedPackets
-import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
 
 class CompressionWrapperPePacket(
