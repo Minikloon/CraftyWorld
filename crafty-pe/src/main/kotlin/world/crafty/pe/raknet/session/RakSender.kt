@@ -47,7 +47,7 @@ class RakSender(val session: RakNetworkSession) {
         lastNack = Instant.now()
     }
 
-    fun sendPayload(data: ByteArray, reliability: RakMessageReliability) {
+    fun sendPayload(data: ByteArray, reliability: RakMessageReliability, immediate: Boolean = false) {
         val message = RakMessage(
                 RakMessageFlags(reliability),
                 if(reliability.reliable) RakMessage.MetaReliability(messageSeqNo++) else null,
@@ -56,7 +56,14 @@ class RakSender(val session: RakNetworkSession) {
                 data
         )
         val datagrams = binpackMessagesInDatagrams(message)
-        datagrams.forEach { queueDatagram(it) }
+        datagrams.forEach {
+            if(immediate) {
+                session.sendRaw(it.serialized())
+            }
+            else {
+                queueDatagram(it)
+            }
+        }
     }
 
     private fun binpackMessagesInDatagrams(vararg messages: RakMessage) : List<RakDatagram> {
@@ -106,6 +113,7 @@ class RakSender(val session: RakNetworkSession) {
         }
     }
 
+    // this queueing is to throttle datagram sending so weak phones aren't overwhelmed
     private fun queueDatagram(datagram: RakDatagram) {
         datagramSendQueue.add(datagram)
         var sent = needAcks[datagram.sequenceNumber]

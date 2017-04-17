@@ -32,6 +32,9 @@ fun registerVertxCraftyCodecs(eb: EventBus) {
     eb.registerDefaultCodec<SetEntityLocationCraftyPacket>(SetEntityLocationCraftyPacket.Codec)
     eb.registerDefaultCodec<QuitCraftyPacket>(QuitCraftyPacket.Codec)
     eb.registerDefaultCodec<DisconnectPlayerCraftyPacket>(DisconnectPlayerCraftyPacket.Codec)
+    eb.registerDefaultCodec<PingCraftyPacket>(PingCraftyPacket.Codec)
+    eb.registerDefaultCodec<PongCraftyPacket>(PongCraftyPacket.Codec)
+    eb.registerDefaultCodec<RemovePlayerCraftyPacket>(RemovePlayerCraftyPacket.Codec)
 }
 
 private inline fun <reified T : CraftyPacket> EventBus.registerDefaultCodec(codec: CraftyPacket.CraftyPacketCodec) {

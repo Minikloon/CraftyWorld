@@ -2,18 +2,17 @@ package world.crafty.server.entity
 
 import world.crafty.common.Location
 import world.crafty.proto.CraftyPacket
-import world.crafty.proto.metadata.MetaValue
 import world.crafty.proto.metadata.builtin.*
-import world.crafty.proto.packets.server.AddPlayerCraftyPacket
+import world.crafty.proto.packets.server.*
 import world.crafty.server.CraftyPlayer
 import world.crafty.server.world.World
 
 class PlayerEntity(
         world: World,
-        entityId: Int,
+        id: Int,
         location: Location,
         val craftyPlayer: CraftyPlayer
-) : Entity(world, entityId, location) {
+) : Entity(world, id, location) {
     val metaEntity = EntityMeta()
     val metaLiving = LivingMeta()
     val metaPlayer = PlayerMeta()
@@ -40,7 +39,9 @@ class PlayerEntity(
 
     override fun createDespawnPackets(): Collection<CraftyPacket> {
         return listOf(
-                
+                RemovePlayerCraftyPacket(
+                        entityId = id
+                )
         )
     }
 

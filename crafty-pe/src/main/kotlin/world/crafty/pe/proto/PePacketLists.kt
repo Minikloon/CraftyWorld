@@ -24,6 +24,7 @@ object ServerBoundPeTopLevelPackets : InboundPePacketList() {
                 ConnectedPingPePacket.Codec,
                 EncryptionWrapperPePacket.Codec,
                 LoginPePacket.Codec,
+                DisconnectNotifyPePacket.Codec,
                 CompressionWrapperPePacket.Codec
         )
     }

@@ -13,7 +13,7 @@ import world.crafty.pe.raknet.RakMessageReliability
 import world.crafty.pe.raknet.packets.AckPePacket
 
 abstract class RakNetworkSession(val socket: DatagramSocket, val address: SocketAddress) : AbstractVerticle() {
-    private val receiver = RakReceiver(this, this::onAck, this::onNack, this::onPayload)
+    private val receiver = RakReceiver(this, this::onAck, this::onNack, this::onPayload, this::onRaknetDisconnect)
     private val sender = RakSender(this)
     
     var mtuSize = 1000
@@ -29,6 +29,8 @@ abstract class RakNetworkSession(val socket: DatagramSocket, val address: Socket
     abstract fun getUnconnectedPongExtraData(serverId: Long) : ByteArray
     
     abstract protected fun onPayload(payload: MinecraftInputStream)
+    
+    abstract protected fun onRaknetDisconnect()
 
     fun queueReceivedDatagram(datagram: DatagramPacket) {
         receiver.onReceiveDatagram(datagram)
@@ -44,8 +46,8 @@ abstract class RakNetworkSession(val socket: DatagramSocket, val address: Socket
         sender.notifyNotAcknowledge()
     }
     
-    fun send(packet: PePacket, reliability: RakMessageReliability) {
-        sender.sendPayload(packet.serializedWithId(), reliability)
+    fun send(packet: PePacket, reliability: RakMessageReliability, immediate: Boolean = false) {
+        sender.sendPayload(packet.serializedWithId(), reliability, immediate)
     }
     
     fun sendRaw(packet: PePacket) {

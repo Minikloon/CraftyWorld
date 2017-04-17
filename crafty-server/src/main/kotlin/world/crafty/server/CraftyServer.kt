@@ -8,8 +8,8 @@ import world.crafty.proto.packets.client.JoinRequestCraftyPacket
 import world.crafty.proto.registerVertxCraftyCodecs
 import world.crafty.proto.metadata.MetaFieldRegistry
 import world.crafty.proto.metadata.registerBuiltInMetaDefinitions
-import world.crafty.proto.packets.server.JoinResponseCraftyPacket
-import world.crafty.proto.packets.server.PreSpawnCraftyPacket
+import world.crafty.proto.packets.client.QuitCraftyPacket
+import world.crafty.proto.packets.server.*
 import world.crafty.server.world.World
 
 private val log = logger<CraftyServer>()
@@ -26,9 +26,9 @@ class CraftyServer(val address: String, val world: World) : AbstractVerticle() {
         MetaFieldRegistry.registerBuiltInMetaDefinitions()
         
         eb.consumer<JoinRequestCraftyPacket>("$address:join") {
-            val request = it.body()
+            val packet = it.body()
             val playerId = ++playerIdCounter
-            val craftyPlayer = CraftyPlayer(this, eb, playerId, request.username, request.authMojang, request.authXbox, request.platform, request.skin, world.spawn)
+            val craftyPlayer = CraftyPlayer(this, eb, playerId, packet.username, packet.authMojang, packet.authXbox, packet.platform, packet.skin, world.spawn)
             playersById[playerId] = craftyPlayer
             log.info { "(Crafty) ${it.body().username} joined, id $playerId!" }
             it.reply(JoinResponseCraftyPacket(playerId, PreSpawnCraftyPacket(
@@ -37,6 +37,11 @@ class CraftyServer(val address: String, val world: World) : AbstractVerticle() {
                     dimension = 0,
                     gamemode = GameMode.SURVIVAL
             )))
+        }
+        
+        eb.consumer<QuitCraftyPacket>("$address:quit") {
+            val packet = it.body()
+            disconnectPlayer(packet.craftyPlayerId, "Quit!", notify = false)
         }
         
         vertx.setPeriodic(50) { world.tick() }
@@ -55,5 +60,14 @@ class CraftyServer(val address: String, val world: World) : AbstractVerticle() {
             if(player != except) 
                 eb.typedSend("p:c:$id", obj)
         }
+    }
+    
+    fun disconnectPlayer(playerId: Int, message: String = "Disconnected by server", notify: Boolean = true) {
+        val player = playersById[playerId] ?: return
+        playersById.remove(playerId)
+        log.info { "Disconnected crafty player ${player.username} ($message)" }
+        player.onDisconnect()
+        if(notify)
+            player.send(DisconnectPlayerCraftyPacket(message))
     }
 }

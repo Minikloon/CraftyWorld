@@ -15,6 +15,8 @@ abstract class Entity(val world: World, val id: Int = world.nextEntityId(), var 
     open fun onSpawn() {}
     
     abstract fun createDespawnPackets() : Collection<CraftyPacket>
+
+    open fun onDespawn() {}
     
     protected fun metaAll(vararg tracker: MetaTracker) : List<MetaValue> {
         return tracker.flatMap { it.getAllValues() }
@@ -33,5 +35,9 @@ abstract class Entity(val world: World, val id: Int = world.nextEntityId(), var 
                 else SetEntityLocationCraftyPacket(id, location, onGround)
         oldLoc = location
         return packet
+    }
+    
+    fun despawn() {
+        world.despawn(id)
     }
 }

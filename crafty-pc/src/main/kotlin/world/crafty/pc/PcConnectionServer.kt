@@ -16,6 +16,7 @@ import world.crafty.proto.metadata.MetaFieldRegistry
 import world.crafty.proto.metadata.registerBuiltInMetaDefinitions
 import world.crafty.proto.registerVertxCraftyCodecs
 import world.crafty.skinpool.protocol.registerVertxSkinPoolCodecs
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 
@@ -31,7 +32,6 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
     val decipher: Cipher
     val x509PubKey: ByteArray
     val encodedBrand: ByteArray
-    var sessionIdCounter = 0
 
     init {
         val rsaKey = generateKeyPair()
@@ -56,23 +56,20 @@ class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
         server = vertx.createNetServer()
         server.connectHandler { socket ->
             log.info { "PC connection from ${socket.remoteAddress()}" }
-            val session = PcNetworkSession(sessionIdCounter++, this, worldServer, socket)
+            val session = PcNetworkSession(this, worldServer, socket)
             sessions[socket] = session
             socket.handler {
                 session.receive(it)
             }
-            socket.endHandler { 
-                sessions.remove(socket)
-                session.close()
+            socket.endHandler {
+                session.disconnect("Disconnected")
             }
         }
         server.listen(port)
-
-        vertx.setPeriodic(1000) {
-            val toRemove = sessions.filter { it.value.lastUpdate.elapsed.seconds > 3 }
-            for(key in toRemove.keys)
-                sessions.remove(key)
-        }
+    }
+    
+    fun removeSessionSocket(address: NetSocket) {
+        sessions.remove(address)
     }
     
     fun getWorldCache(worldName: String) : ConcurrentColumnsCache<PrecompressedPayload> {

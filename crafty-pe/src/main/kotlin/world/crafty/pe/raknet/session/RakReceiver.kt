@@ -12,7 +12,13 @@ import java.util.ArrayList
 import java.util.concurrent.ConcurrentLinkedQueue
 
 private val log = logger<RakReceiver>()
-class RakReceiver(val session: RakNetworkSession, val onAck: (AckPePacket) -> Unit, val onNack: () -> Unit, val handlePayload: (MinecraftInputStream) -> Unit) {
+class RakReceiver(
+        val session: RakNetworkSession,
+        val onAck: (AckPePacket) -> Unit, 
+        val onNack: () -> Unit, 
+        val handlePayload: (MinecraftInputStream) -> Unit, 
+        val onDisconnect: () -> Unit
+) {
     private val incomingQueue = ConcurrentLinkedQueue<DatagramPacket>()
 
     private val incompleteSplits = mutableMapOf<Short, SplittedMessage>()
@@ -132,6 +138,9 @@ class RakReceiver(val session: RakNetworkSession, val onAck: (AckPePacket) -> Un
                 log.trace { "open connection request 2" }
                 val reply = OpenConnectionReply2PePacket(1234, session.address, packet.mtuSize, false)
                 session.sendRaw(reply)
+            }
+            is DisconnectNotifyPePacket -> {
+                onDisconnect()
             }
             else -> {
                 log.warn { "unhandled raknet packet ${packet.javaClass.name}" }

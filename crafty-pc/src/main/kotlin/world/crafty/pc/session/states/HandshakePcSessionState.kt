@@ -20,7 +20,7 @@ class HandshakePcSessionState(session: PcNetworkSession) : PcSessionState(sessio
                     2 -> FirstPacketLoginStage(session)
                     else -> {
                         log.warn { "Invalid handshake state for ${session.address}" }
-                        session.close()
+                        session.disconnect("Invalid handshake")
                         return
                     }
                 })

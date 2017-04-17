@@ -11,18 +11,20 @@ import world.crafty.pc.proto.packets.client.*
 import world.crafty.common.utils.*
 import world.crafty.common.vertx.*
 import world.crafty.mojang.MojangProfile
+import world.crafty.pc.proto.packets.server.DisconnectPcPacket
 import world.crafty.pc.session.states.HandshakePcSessionState
 import world.crafty.pc.session.pass.NoEncryptionPass
 import world.crafty.pc.session.PcSessionState
 import world.crafty.pc.session.pass.CompressionPass
 import world.crafty.pc.session.pass.EncryptionPass
 import world.crafty.pc.session.pass.NoCompressionPass
+import world.crafty.proto.CraftyPacket
+import world.crafty.proto.packets.client.QuitCraftyPacket
 import kotlin.reflect.KClass
 
 private val log = logger<PcNetworkSession>()
-class PcNetworkSession(val sessionId: Int, val server: PcConnectionServer, val worldServer: String, private val socket: NetSocket) {
+class PcNetworkSession(val connServer: PcConnectionServer, val worldServer: String, private val socket: NetSocket) {
     val address = socket.remoteAddress().host()
-    val lastUpdate = Clock()
 
     private var state: PcSessionState = HandshakePcSessionState(this)
     
@@ -40,7 +42,13 @@ class PcNetworkSession(val sessionId: Int, val server: PcConnectionServer, val w
         val bs = BufferOutputStream(buffer)
         val stream = encryptionPass.encryptionStream(bs)
         content.serializeWithLengthPrefix(stream, compressionPass.compressing, compressionPass.threshold)
-        socket.write(buffer)
+        
+        try {
+            socket.write(buffer)
+        } catch(e: Exception) {
+            log.debug { "Error sending ${content::class.simpleName} to $address" }
+            disconnect()
+        }
     }
 
     fun receive(buffer: Buffer) {
@@ -71,22 +79,24 @@ class PcNetworkSession(val sessionId: Int, val server: PcConnectionServer, val w
             state.handle(packet)
         } catch(e: Exception) {
             log.error("Error while handling packet ${packet::class.simpleName} within state ${state::class.simpleName}", e)
-            close()
+            disconnect("Connection error")
         }
-        lastUpdate.reset()
     }
-
-    /*
-    fun <T: Any> craftyConsume(clazz: KClass<T>, onReceive: (packet: Message<T>) -> Unit) {
-        val consumer = eb.typedConsumer("p:s:$craftyPlayerId", clazz, onReceive)
-        craftyConsumers.add(consumer)
-    }
-    */
     
-    fun close() {
+    private var disconnected = false
+    fun disconnect(message: String = "Unexpected server shutdown") {
+        if(disconnected)
+            return
+        disconnected = true
+        
+        launch(CurrentVertx) {
+            state.onDisconnect(message)
+        }
+        
+        connServer.removeSessionSocket(socket)
+
         launch(CurrentVertx) {
             state.stop()
         }
-        //eb.typedSend("$worldServer:quit", QuitCraftyPacket(craftyPlayerId))
     }
 }

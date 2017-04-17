@@ -1,10 +1,10 @@
 package world.crafty.pe.session.states
 
+import io.vertx.core.eventbus.Message
+import kotlinx.coroutines.experimental.launch
 import org.joml.Vector3f
 import world.crafty.common.utils.logger
-import world.crafty.common.vertx.typedConsumer
-import world.crafty.common.vertx.typedSend
-import world.crafty.common.vertx.vxm
+import world.crafty.common.vertx.*
 import world.crafty.pe.PeLocation
 import world.crafty.pe.PeNetworkSession
 import world.crafty.pe.entity.PeEntity
@@ -30,6 +30,7 @@ import world.crafty.proto.CraftySkin
 import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.packets.client.*
 import world.crafty.proto.packets.server.*
+import kotlin.reflect.KClass
 
 private val log = logger<PlayPeSessionState>()
 class PlayPeSessionState(
@@ -53,8 +54,9 @@ class PlayPeSessionState(
                     val username = loginExtraData.displayName
                     val joinRequest = JoinRequestCraftyPacket(username, true, false, MinecraftPlatform.PE, craftySkin)
                     val joinResponse = vxm<JoinResponseCraftyPacket> { eb.send("${session.worldServer}:join", joinRequest, it) }
-                    if (!joinResponse.accepted)
-                        throw IllegalStateException("CraftyServer denied our join request :(")
+                    if (!joinResponse.accepted) {
+                        throw IllegalStateException("CraftyServer denied our join request :(") // TODO: disconnect here
+                    }
 
                     val prespawn = joinResponse.prespawn!!
                     ownEntityId = prespawn.entityId
@@ -84,11 +86,6 @@ class PlayPeSessionState(
 
                     craftyPlayerId = joinResponse.playerId!!
 
-                    eb.consumer<ChatMessageCraftyPacket>("p:c:$craftyPlayerId:chat") { // TODO: move this somewhere more sensible
-                        val text = it.body().text
-                        session.queueSend(ChatPePacket(ChatType.CHAT, "", text))
-                    }
-
                     session.queueSend(SetChunkRadiusPePacket(5))
                     session.queueSend(SetAttributesPePacket(0, PlayerAttribute.defaults))
                 }
@@ -109,82 +106,20 @@ class PlayPeSessionState(
                 val chunkRadius = Math.min(5, packet.desiredChunkRadius)
                 session.queueSend(SetChunkRadiusPePacket(chunkRadius))
 
-                eb.typedConsumer("p:c:$craftyPlayerId", AddPlayerCraftyPacket::class) {
-                    val packet = it.body()
-
-                    val entity = PePlayerEntity(packet.entityId.toLong())
-                    loadedEntities[packet.entityId] = entity
-
-                    if(packet.craftyId == craftyPlayerId)
-                        return@typedConsumer
-
-                    val metadata = entity.metaFromCrafty(session.server.metaTranslatorRegistry, packet.meta)
-
-                    session.queueSend(PlayerListItemPePacket(
-                            action = PlayerListAction.ADD,
-                            items = listOf(
-                                    PlayerListPeAdd(
-                                            uuid = packet.uuid,
-                                            entityId = entity.id,
-                                            name = packet.username,
-                                            skin = PeSkin.fromCrafty(packet.skin)
-                                    )
-                            )
-                    ))
-                    session.queueSend(AddPlayerPePacket(
-                            uuid = packet.uuid,
-                            username = packet.username,
-                            entityId = entity.id,
-                            runtimeEntityId = entity.id,
-                            x = packet.location.x,
-                            y = packet.location.y,
-                            z = packet.location.z,
-                            speedX = 0f,
-                            speedY = 0f,
-                            speedZ = 0f,
-                            headPitch = packet.location.headPitch.toDegrees(),
-                            headYaw = packet.location.bodyYaw.toDegrees(),
-                            bodyYaw = packet.location.bodyYaw.toDegrees(),
-                            itemInHand = PeItem(0, 0, 0, null),
-                            metadata = metadata
-                    ))
-                    session.queueSend(PlayerListItemPePacket(PlayerListAction.REMOVE, listOf(PlayerListPeRemove(packet.uuid))))
-                }
-
-                eb.typedConsumer("p:c:$craftyPlayerId", PatchEntityCraftyPacket::class) {
-                    val packet = it.body()
-                    val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
-                    val meta = entity.metaFromCrafty(session.server.metaTranslatorRegistry, packet.values)
-                    session.queueSend(EntityMetadataPePacket(entity.id, meta))
-                }
-
-                eb.typedConsumer("p:c:$craftyPlayerId", SetEntityLocationCraftyPacket::class) {
-                    val packet = it.body()
-                    if(packet.entityId == ownEntityId) return@typedConsumer
-
-                    val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
-
-                    session.queueSend(entity.getSetLocationPacket(packet.location.toPe(), packet.onGround))
-                }
-
-                eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {
-                    session.queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
-                }
+                registerCraftyConsumers()
 
                 val cache = session.server.getWorldCache(session.worldServer)
-                eb.typedSend<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId", ChunksRadiusRequestCraftyPacket(clientLoc.positionVec3(), 0, chunkRadius)) {
-                    val response = it.result().body()
-                    response.chunkColumns.forEach { setColumn ->
-                        val chunkPacket = when(setColumn.cacheStrategy) {
-                            ChunkCacheStategy.PER_WORLD -> cache.getOrComputeChunkPacket(setColumn, CraftyChunkColumn::toPePacket)
-                            ChunkCacheStategy.PER_PLAYER -> setColumn.chunkColumn.toPePacket()
-                        }
-                        session.send(chunkPacket, RakMessageReliability.RELIABLE_ORDERED)
+                val response = sendCraftyAsync<ChunksRadiusResponseCraftyPacket>(ChunksRadiusRequestCraftyPacket(clientLoc.positionVec3(), 0, chunkRadius)).body()
+                response.chunkColumns.forEach { setColumn ->
+                    val chunkPacket = when (setColumn.cacheStrategy) {
+                        ChunkCacheStategy.PER_WORLD -> cache.getOrComputeChunkPacket(setColumn, CraftyChunkColumn::toPePacket)
+                        ChunkCacheStategy.PER_PLAYER -> setColumn.chunkColumn.toPePacket()
                     }
-                    log.debug { "sent pe ${response.chunkColumns.size} chunks" }
-
-                    eb.typedSend("p:s:$craftyPlayerId", ReadyToSpawnCraftyPacket())
+                    session.send(chunkPacket, RakMessageReliability.RELIABLE_ORDERED)
                 }
+                log.debug { "sent pe ${response.chunkColumns.size} chunks" }
+
+                sendCrafty(ReadyToSpawnCraftyPacket())
             }
             is PlayerActionPePacket -> {
                 val action = packet.action
@@ -207,11 +142,11 @@ class PlayPeSessionState(
                     PePlayerAction.START_GLIDE -> return
                     PePlayerAction.STOP_GLIDE -> return
                 }
-                eb.typedSend("p:s:$craftyPlayerId", PlayerActionCraftyPacket(craftyAction))
+                sendCrafty(PlayerActionCraftyPacket(craftyAction))
             }
             is SetPlayerLocPePacket -> {
                 if(packet.mode != MoveMode.INTERPOLATE) {
-                    log.warn { "Received PE move of mode ${packet.mode} from ${loginExtraData?.displayName}" }
+                    log.warn { "Received PE move of mode ${packet.mode} from ${loginExtraData.displayName}" }
                     return
                 }
                 val newLoc = packet.loc.copy(y = packet.loc.y - PePlayerEntity.eyeHeight)
@@ -228,16 +163,129 @@ class PlayPeSessionState(
                     SetPlayerLookCraftyPacket(headPitch = newLoc.headPitch, headYaw = newLoc.headYaw, bodyYaw = newLoc.bodyYaw)
                 }
 
-                eb.typedSend("p:s:$craftyPlayerId", craftyPacket)
+                sendCrafty(craftyPacket)
 
                 clientLoc = newLoc
             }
             is ChatPePacket -> {
-                eb.typedSend("p:s:$craftyPlayerId", ChatFromClientCraftyPacket(packet.text))
+                sendCrafty(ChatFromClientCraftyPacket(packet.text))
             }
             else -> {
                 log.warn { "Unhandled pe message ${packet.javaClass.simpleName}" }
             }
+        }
+    }
+    
+    fun registerCraftyConsumers() {
+        craftyConsumer(PingCraftyPacket::class) { packet ->
+            sendCrafty(PongCraftyPacket(packet.id))
+        }
+        
+        craftyConsumer(ChatMessageCraftyPacket::class) { packet ->
+            session.queueSend(ChatPePacket(ChatType.CHAT, "", packet.text))
+        }
+
+        craftyConsumer(AddPlayerCraftyPacket::class) { packet ->
+            val entity = PePlayerEntity(packet.entityId.toLong())
+            loadedEntities[packet.entityId] = entity
+
+            if(packet.craftyId == craftyPlayerId)
+                return@craftyConsumer
+
+            val metadata = entity.metaFromCrafty(session.server.metaTranslatorRegistry, packet.meta)
+
+            session.queueSend(PlayerListItemPePacket(
+                    action = PlayerListAction.ADD,
+                    items = listOf(
+                            PlayerListPeAdd(
+                                    uuid = packet.uuid,
+                                    entityId = entity.id,
+                                    name = packet.username,
+                                    skin = PeSkin.fromCrafty(packet.skin)
+                            )
+                    )
+            ))
+            session.queueSend(AddPlayerPePacket(
+                    uuid = packet.uuid,
+                    username = packet.username,
+                    entityId = entity.id,
+                    runtimeEntityId = entity.id,
+                    x = packet.location.x,
+                    y = packet.location.y,
+                    z = packet.location.z,
+                    speedX = 0f,
+                    speedY = 0f,
+                    speedZ = 0f,
+                    headPitch = packet.location.headPitch.toDegrees(),
+                    headYaw = packet.location.bodyYaw.toDegrees(),
+                    bodyYaw = packet.location.bodyYaw.toDegrees(),
+                    itemInHand = PeItem(0, 0, 0, null),
+                    metadata = metadata
+            ))
+            session.queueSend(PlayerListItemPePacket(PlayerListAction.REMOVE, listOf(PlayerListPeRemove(packet.uuid))))
+        }
+        
+        craftyConsumer(RemovePlayerCraftyPacket::class) { packet ->
+            session.queueSend(RemoveEntityPePacket(packet.entityId.toLong()))
+        }
+
+        craftyConsumer(PatchEntityCraftyPacket::class) { packet ->
+            val entity = loadedEntities[packet.entityId] ?: return@craftyConsumer
+            val meta = entity.metaFromCrafty(session.server.metaTranslatorRegistry, packet.values)
+            session.queueSend(EntityMetadataPePacket(entity.id, meta))
+        }
+
+        craftyConsumer(SetEntityLocationCraftyPacket::class) { packet ->
+            if(packet.entityId == ownEntityId) return@craftyConsumer
+
+            val entity = loadedEntities[packet.entityId] ?: return@craftyConsumer
+
+            session.queueSend(entity.getSetLocationPacket(packet.location.toPe(), packet.onGround))
+        }
+
+        craftyConsumer(SpawnSelfCraftyPacket::class) {
+            session.queueSend(PlayerStatusPePacket(PlayerStatus.SPAWN))
+        }
+        
+        craftyConsumer(DisconnectPlayerCraftyPacket::class) {
+            session.disconnect(it.message)
+        }
+    }
+
+    fun <T: Any> craftyConsumer(clazz: KClass<T>, onReceive: suspend (packet: T) -> Unit) {
+        vertxTypedConsumer("p:c:$craftyPlayerId", clazz) {
+            launch(CurrentVertx) {
+                onReceive(it.body())
+            }
+        }
+    }
+
+    fun sendCrafty(packet: CraftyPacket) {
+        try {
+            eb.typedSend("p:s:$craftyPlayerId", packet)
+        } catch(e: Exception) {
+            log.debug { "Error while sending packet ${packet::class.simpleName} to crafty for player ${loginExtraData.displayName}" }
+            session.disconnect()
+        }
+    }
+
+    suspend fun <TReply> sendCraftyAsync(packet: CraftyPacket) : Message<TReply> {
+        try {
+            return eb.typedSendAsync<TReply>("p:s:$craftyPlayerId", packet)
+        } catch(e: Exception) {
+            log.debug { "Error while sending packet ${packet::class.simpleName} to crafty for player ${loginExtraData.displayName}" }
+            session.disconnect()
+            throw e
+        }
+    }
+
+    suspend override fun onDisconnect(message: String) {
+        log.info { "Disconnected PE ${loginExtraData.displayName} ($message)" }
+        
+        try {
+            eb.send("${session.worldServer}:quit", QuitCraftyPacket(craftyPlayerId))
+        } catch(e: Exception) {
+            log.warn("Failed to notify PE player ${loginExtraData.displayName} quit, did the backend server die?", e)
         }
     }
 }

@@ -1,5 +1,6 @@
 package world.crafty.pc.session.states
 
+import io.vertx.core.eventbus.Message
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.joml.Vector3f
@@ -22,11 +23,13 @@ import world.crafty.pc.proto.packets.server.*
 import world.crafty.pc.session.PcSessionState
 import world.crafty.pc.world.toPcPacket
 import world.crafty.proto.CraftyChunkColumn
+import world.crafty.proto.CraftyPacket
 import world.crafty.proto.packets.client.*
 import world.crafty.proto.packets.server.*
 import world.crafty.skinpool.CraftySkinPoolServer
 import world.crafty.skinpool.protocol.client.HashPollPoolPacket
 import world.crafty.skinpool.protocol.server.HashPollReplyPoolPacket
+import kotlin.reflect.KClass
 
 private val log = logger<PlayPcSessionState>()
 class PlayPcSessionState(
@@ -36,21 +39,16 @@ class PlayPcSessionState(
         val prespawn: PreSpawnCraftyPacket
 ) : PcSessionState(session) {
     override val packetList = ServerBoundPcPlayPackets
-    private val eb = session.server.vertx.eventBus()
+    private val eb = session.connServer.vertx.eventBus()
 
     private lateinit var brand : String
     private var ownEntityId = 0
     private var location = Location(0f, 0f, 0f)
     private val loadedEntities = mutableMapOf<Int, PcEntity>()
     
-    val server = session.server
+    val server = session.connServer
 
     suspend override fun onStart() {
-        eb.consumer<ChatMessageCraftyPacket>("p:c:$craftyPlayerId:chat") {
-            val text = it.body().text
-            session.send(ServerChatMessagePcPacket(McChat(text), ChatPosition.CHAT_BOX))
-        }
-
         ownEntityId = prespawn.entityId
         location = prespawn.spawnLocation
         session.send(JoinGamePcPacket(
@@ -64,112 +62,20 @@ class PlayPcSessionState(
         ))
         session.send(ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
 
-        eb.typedSend<ChunksRadiusResponseCraftyPacket>("p:s:$craftyPlayerId", ChunksRadiusRequestCraftyPacket(prespawn.spawnLocation.positionVec3(), 0, 8)) {
-            val response = it.result().body()
-            val cache = server.getWorldCache(session.worldServer)
-            response.chunkColumns.forEach { setColumn ->
-                val chunkPacket = when(setColumn.cacheStrategy) {
-                    ChunkCacheStategy.PER_WORLD -> cache.getOrComputeChunkPacket(setColumn, CraftyChunkColumn::toPcPacket)
-                    ChunkCacheStategy.PER_PLAYER -> setColumn.chunkColumn.toPcPacket()
-                }
-                session.send(chunkPacket)
+        registerCraftyConsumers()
+        
+        val chunkRadiusReq = ChunksRadiusRequestCraftyPacket(prespawn.spawnLocation.positionVec3(), 0, 8)
+        val chunkRadiusRes = sendCraftyAsync<ChunksRadiusResponseCraftyPacket>(chunkRadiusReq).body()
+        val cache = server.getWorldCache(session.worldServer)
+        chunkRadiusRes.chunkColumns.forEach { setColumn ->
+            val chunkPacket = when (setColumn.cacheStrategy) {
+                ChunkCacheStategy.PER_WORLD -> cache.getOrComputeChunkPacket(setColumn, CraftyChunkColumn::toPcPacket)
+                ChunkCacheStategy.PER_PLAYER -> setColumn.chunkColumn.toPcPacket()
             }
-
-            eb.typedConsumer("p:c:$craftyPlayerId", AddPlayerCraftyPacket::class) {
-                val packet = it.body()
-
-                if(packet.craftyId == craftyPlayerId)
-                    return@typedConsumer
-
-                launch(CurrentVertx) {
-                    val skinReq = HashPollPoolPacket(packet.skin.fnvHashOfPng, needProfile = true)
-                    val skinProfile = eb.typedSendAsync<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, skinReq).body()
-                    val playerProps = if(skinProfile.textureProp == null) emptyList() else listOf(skinProfile.textureProp!!)
-
-                    val entity = PcEntity(packet.entityId, packet.location)
-                    loadedEntities[entity.id] = entity
-
-                    if(packet.craftyId == craftyPlayerId)
-                        return@launch
-
-                    val metadata = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.meta)
-
-                    session.send(PlayerListItemPcPacket(
-                            action = PlayerListAction.ADD,
-                            items = listOf(
-                                    PlayerListPcAdd(
-                                            uuid = packet.uuid,
-                                            name = packet.username,
-                                            properties = playerProps,
-                                            gamemode = 0,
-                                            ping = 30,
-                                            displayName = null
-                                    )
-                            )
-                    ))
-                    session.send(SpawnPlayerPcPacket(
-                            entityId = packet.entityId,
-                            uuid = packet.uuid,
-                            location = packet.location,
-                            metadata = metadata
-                    ))
-                    session.send(SetEntityHeadLookPcPacket(
-                            entityId = packet.entityId,
-                            headYaw = packet.location.headYaw
-                    ))
-                    delay(1000)
-                    session.send(PlayerListItemPcPacket(PlayerListAction.REMOVE, listOf(PlayerListPcRemove(packet.uuid))))
-                }
-            }
-
-            eb.typedConsumer("p:c:$craftyPlayerId", PatchEntityCraftyPacket::class) {
-                val packet = it.body()
-                val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
-                val meta = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.values)
-                session.send(EntityMetadataPcPacket(packet.entityId, meta))
-            }
-
-            eb.typedConsumer("p:c:$craftyPlayerId", SetEntityLocationCraftyPacket::class) {
-                val packet = it.body()
-                if(packet.entityId == ownEntityId) return@typedConsumer
-
-                val entity = loadedEntities[packet.entityId] ?: return@typedConsumer
-
-                entity.getMovePacketsAndClear(packet.location, packet.onGround).forEach {
-                    session.send(it)
-                }
-            }
-
-            eb.typedConsumer("p:c:$craftyPlayerId", SpawnSelfCraftyPacket::class) {
-                launch(CurrentVertx) {
-                    session.send(PlayerListItemPcPacket(
-                            action = PlayerListAction.ADD,
-                            items = listOf(
-                                    PlayerListPcAdd(
-                                            uuid = profile.uuid,
-                                            name = profile.name,
-                                            properties = profile.properties,
-                                            gamemode = 0,
-                                            ping = 30,
-                                            displayName = null
-                                    )
-                            )
-                    ))
-                    session.send(TeleportPlayerPcPacket(location, relativeFlags = 0, confirmId = 1))
-                    delay(1000)
-                    session.send(PlayerListItemPcPacket(
-                            action = PlayerListAction.REMOVE,
-                            items = listOf(PlayerListPcRemove(profile.uuid))
-                    ))
-                }
-            }
-
-            eb.typedSend("p:s:$craftyPlayerId", ReadyToSpawnCraftyPacket())
+            session.send(chunkPacket)
         }
 
-        setPeriodic(1000) {
-            session.send(ServerKeepAlivePcPacket(0))
-        }
+        sendCrafty(ReadyToSpawnCraftyPacket())
     }
     
     suspend override fun handle(packet: PcPacket) {
@@ -178,7 +84,7 @@ class PlayPcSessionState(
                 log.info { "Client settings like locale ${packet.locale}" }
             }
             is ClientKeepAlivePcPacket -> {
-
+                sendCrafty(PongCraftyPacket(packet.confirmId))
             }
             is ClientPluginMessagePcPacket -> {
                 val channel = packet.channel
@@ -193,11 +99,11 @@ class PlayPcSessionState(
                 }
             }
             is ClientChatMessagePcPacket -> {
-                eb.typedSend("p:s:$craftyPlayerId", ChatFromClientCraftyPacket(packet.text))
+                sendCrafty(ChatFromClientCraftyPacket(packet.text))
             }
             is PlayerPositionPcPacket -> {
                 val pos = Vector3f(packet.x.toFloat(), packet.y.toFloat(), packet.z.toFloat())
-                eb.typedSend("p:s:$craftyPlayerId", SetPlayerPosCraftyPacket(pos, packet.onGround))
+                sendCrafty(SetPlayerPosCraftyPacket(pos, packet.onGround))
             }
             is PlayerPosAndLookPcPacket -> {
                 val pos = Location(
@@ -208,13 +114,13 @@ class PlayPcSessionState(
                         headYaw = Angle256.fromDegrees(packet.yaw),
                         headPitch = Angle256.fromDegrees(packet.pitch)
                 )
-                eb.typedSend("p:s:$craftyPlayerId", SetPlayerPosAndLookCraftyPacket(pos, packet.onGround))
+                sendCrafty(SetPlayerPosAndLookCraftyPacket(pos, packet.onGround))
             }
             is PlayerLookPcPacket -> {
                 val headPitch = Angle256.fromDegrees(packet.pitch)
                 val headYaw = Angle256.fromDegrees(packet.yaw)
                 val bodyYaw = headYaw
-                eb.typedSend("p:s:$craftyPlayerId", SetPlayerLookCraftyPacket(headPitch, headYaw, bodyYaw))
+                sendCrafty(SetPlayerLookCraftyPacket(headPitch, headYaw, bodyYaw))
             }
             is EntityActionPcPacket -> {
                 val craftyAction = when(packet.action) {
@@ -228,7 +134,7 @@ class PlayPcSessionState(
                     PcEntityAction.OPEN_HORSE_INVENTORY -> return
                     PcEntityAction.START_ELYTRA_FLY -> return
                 }
-                eb.typedSend("p:s:$craftyPlayerId", PlayerActionCraftyPacket(craftyAction))
+                sendCrafty(PlayerActionCraftyPacket(craftyAction))
             }
             is PlayerTeleportConfirmPcPacket -> {
                 log.info { "teleport confirm ${packet.confirmId}" }
@@ -238,8 +144,152 @@ class PlayPcSessionState(
             }
         }
     }
-
-    suspend override fun onStop() {
+    
+    fun registerCraftyConsumers() {
+        craftyConsumer(PingCraftyPacket::class) {
+            session.send(ServerKeepAlivePcPacket(it.id))
+        }
         
+        craftyConsumer(ChatMessageCraftyPacket::class) {
+            val text = it.text
+            session.send(ServerChatMessagePcPacket(McChat(text), ChatPosition.CHAT_BOX))
+        }
+
+        craftyConsumer(AddPlayerCraftyPacket::class) { packet ->
+            if(packet.craftyId == craftyPlayerId)
+                return@craftyConsumer
+
+            val skinReq = HashPollPoolPacket(packet.skin.fnvHashOfPng, needProfile = true)
+            val skinProfile = eb.typedSendAsync<HashPollReplyPoolPacket>(CraftySkinPoolServer.channelPrefix, skinReq).body()
+            val playerProps = if(skinProfile.textureProp == null) emptyList() else listOf(skinProfile.textureProp!!)
+
+            val entity = PcEntity(packet.entityId, packet.location)
+            loadedEntities[entity.id] = entity
+
+            if(packet.craftyId == craftyPlayerId)
+                return@craftyConsumer
+
+            val metadata = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.meta)
+
+            session.send(PlayerListItemPcPacket(
+                    action = PlayerListAction.ADD,
+                    items = listOf(
+                            PlayerListPcAdd(
+                                    uuid = packet.uuid,
+                                    name = packet.username,
+                                    properties = playerProps,
+                                    gamemode = 0,
+                                    ping = 30,
+                                    displayName = null
+                            )
+                    )
+            ))
+            session.send(SpawnPlayerPcPacket(
+                    entityId = packet.entityId,
+                    uuid = packet.uuid,
+                    location = packet.location,
+                    metadata = metadata
+            ))
+            session.send(SetEntityHeadLookPcPacket(
+                    entityId = packet.entityId,
+                    headYaw = packet.location.headYaw
+            ))
+            delay(2000)
+            session.send(PlayerListItemPcPacket(PlayerListAction.REMOVE, listOf(PlayerListPcRemove(packet.uuid))))
+        }
+        
+        craftyConsumer(RemovePlayerCraftyPacket::class) { packet ->
+            loadedEntities.remove(packet.entityId)
+            session.send(DestroyEntitiesPcPacket(listOf(packet.entityId)))
+        }
+
+        craftyConsumer(PatchEntityCraftyPacket::class) { packet ->
+            val entity = loadedEntities[packet.entityId] ?: return@craftyConsumer
+            val meta = entity.metaFromCrafty(server.metaTranslatorRegistry, packet.values)
+            session.send(EntityMetadataPcPacket(packet.entityId, meta))
+        }
+
+        craftyConsumer(SetEntityLocationCraftyPacket::class) { packet ->
+            if(packet.entityId == ownEntityId) return@craftyConsumer
+
+            val entity = loadedEntities[packet.entityId] ?: return@craftyConsumer
+
+            entity.getMovePacketsAndClear(packet.location, packet.onGround).forEach {
+                session.send(it)
+            }
+        }
+
+        craftyConsumer(SpawnSelfCraftyPacket::class) {
+            session.send(PlayerListItemPcPacket(
+                    action = PlayerListAction.ADD,
+                    items = listOf(
+                            PlayerListPcAdd(
+                                    uuid = profile.uuid,
+                                    name = profile.name,
+                                    properties = profile.properties,
+                                    gamemode = 0,
+                                    ping = 30,
+                                    displayName = null
+                            )
+                    )
+            ))
+            session.send(TeleportPlayerPcPacket(location, relativeFlags = 0, confirmId = 1))
+            delay(2000)
+            session.send(PlayerListItemPcPacket(
+                    action = PlayerListAction.REMOVE,
+                    items = listOf(PlayerListPcRemove(profile.uuid))
+            ))
+        }
+        
+        craftyConsumer(DisconnectPlayerCraftyPacket::class) {
+            session.disconnect(it.message)
+        }
+    }
+    
+
+    fun <T: Any> craftyMessageConsumer(clazz: KClass<T>, onReceive: suspend (packet: Message<T>) -> Unit) {
+        vertxTypedConsumer("p:c:$craftyPlayerId", clazz) {
+            launch(CurrentVertx) {
+                onReceive(it)
+            }
+        }
+    }
+    
+    fun <T: Any> craftyConsumer(clazz: KClass<T>, onReceive: suspend (packet: T) -> Unit) {
+        vertxTypedConsumer("p:c:$craftyPlayerId", clazz) {
+            launch(CurrentVertx) {
+                onReceive(it.body())
+            }
+        }
+    }
+
+    fun sendCrafty(packet: CraftyPacket) {
+        try {
+            eb.typedSend("p:s:$craftyPlayerId", packet)
+        } catch(e: Exception) {
+            log.debug { "Error while sending packet ${packet::class.simpleName} to crafty for player ${profile.name}" }
+            session.disconnect()
+        }
+    }
+
+    suspend fun <TReply> sendCraftyAsync(packet: CraftyPacket) : Message<TReply> {
+        try {
+            return eb.typedSendAsync<TReply>("p:s:$craftyPlayerId", packet)
+        } catch(e: Exception) {
+            log.debug { "Error while sending packet ${packet::class.simpleName} to crafty for player ${profile.name}" }
+            session.disconnect()
+            throw e
+        }
+    }
+
+    suspend override fun onDisconnect(message: String) {
+        session.send(DisconnectPcPacket(McChat(message)))
+        log.info { "Disconnected PC player ${profile.name} ($message)" }
+        
+        try {
+            eb.send("${session.worldServer}:quit", QuitCraftyPacket(craftyPlayerId))
+        } catch(e: Exception) {
+            log.warn("Failed to notify PC player ${profile.name} quit, did the backend server die?", e)
+        }
     }
 }

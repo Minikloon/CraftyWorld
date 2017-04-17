@@ -15,6 +15,7 @@ import world.crafty.pe.proto.packets.client.*
 import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
 import world.crafty.pe.raknet.*
+import world.crafty.pe.raknet.packets.DisconnectNotifyPePacket
 import world.crafty.pe.raknet.session.RakNetworkSession
 import world.crafty.pe.session.PeSessionState
 import world.crafty.pe.session.pass.EncryptionPass
@@ -22,6 +23,8 @@ import world.crafty.pe.session.pass.NoEncryptionPass
 import world.crafty.pe.session.states.ConnectionPeSessionState
 import java.security.KeyFactory
 import java.security.spec.X509EncodedKeySpec
+import java.time.Duration
+import java.time.Instant
 import java.util.*
 
 private val log = logger<PeNetworkSession>()
@@ -33,11 +36,17 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     private val packetSendQueue = mutableListOf<PePacket>()
     
     private lateinit var eb: EventBus
+    
+    private var lastPing = Instant.now()
 
     override fun onStart(vertx: Vertx) {
         state = ConnectionPeSessionState(this)
         eb = vertx.eventBus()
         vertx.setPeriodic(10) { _ -> processPacketSendQueue() }
+        vertx.setPeriodic(5000) {
+            if(lastPing.sinceThen() > Duration.ofMillis(5500))
+                disconnect("Timeout")
+        }
     }
 
     override fun getUnconnectedPongExtraData(serverId: Long): ByteArray {
@@ -66,7 +75,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
                 handlePeMessage(packet)
             } catch(e: Exception) {
                 log.error(e) { "Error while handling packet ${packet::class.simpleName}" }
-                close()
+                //close()
             }
         }
     }
@@ -77,6 +86,8 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
         when(message) {
             is ConnectedPingPePacket -> {
                 val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
+                lastPing = Instant.now()
+                log.info { "Ping from client ${deploymentID()}!" }
                 send(response, UNRELIABLE)
             }
             is EncryptionWrapperPePacket -> {
@@ -88,6 +99,9 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
             }
             is CompressionWrapperPePacket -> {
                 message.packets.forEach { handlePeMessage(it) }
+            }
+            is DisconnectNotifyPePacket -> {
+                disconnect("Client disconnected")
             }
             else -> {
                 state.handle(message)
@@ -125,9 +139,29 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
         state = newState
         newState.start()
     }
+
+    override fun onRaknetDisconnect() {
+        disconnect("RakNet disconnect")
+    }
     
-    fun close() {
+    private var disconnected = false
+    fun disconnect(message: String = "Unexpected server disconnect") {
+        if(disconnected)
+            return
+        disconnected = true
         
+        send(EncryptionWrapperPePacket(DisconnectPePacket(message)), RELIABLE, immediate = true)
+        launch(CurrentVertx) {
+            state.onDisconnect(message)
+        }
+
+        server.removeSessionSocket(address)
+
+        launch(CurrentVertx) {
+            state.stop()
+        }
+
+        vertx.undeploy(deploymentID())
     }
     
     companion object {

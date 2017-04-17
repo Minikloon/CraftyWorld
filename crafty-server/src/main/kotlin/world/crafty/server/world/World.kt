@@ -1,6 +1,7 @@
 package world.crafty.server.world
 
 import world.crafty.common.Location
+import world.crafty.common.utils.logger
 import world.crafty.proto.CraftyChunkColumn
 import world.crafty.proto.CraftyPacket
 import world.crafty.proto.packets.server.PatchEntityCraftyPacket
@@ -8,6 +9,7 @@ import world.crafty.server.CraftyPlayer
 import world.crafty.server.entity.Entity
 import world.crafty.server.utils.broadcast
 
+private val log = logger<World>()
 class World(val chunks: List<CraftyChunkColumn>, val spawn: Location) {
     private val viewers = mutableSetOf<CraftyPlayer>()
     
@@ -20,16 +22,21 @@ class World(val chunks: List<CraftyChunkColumn>, val spawn: Location) {
         return ++entityIdCounter
     }
     
-    fun <T: Entity> spawn(spawner: (world: World) -> T) : T {
-        val id = ++entityIdCounter
-        val entity = spawner(this)
+    fun <T: Entity> spawn(spawner: (world: World, id: Int) -> T) : T {
+        val entity = spawner(this, nextEntityId())
         
         entity.createSpawnPackets().broadcast(viewers)
         entity.onSpawn()
 
-        entitiesById[id] = entity
+        entitiesById[entity.id] = entity
         
         return entity
+    }
+    
+    fun despawn(entityId: Int) {
+        val entity = entitiesById.remove(entityId) ?: return
+        entity.onDespawn()
+        entity.createDespawnPackets().broadcast(viewers)
     }
     
     fun tick() {
