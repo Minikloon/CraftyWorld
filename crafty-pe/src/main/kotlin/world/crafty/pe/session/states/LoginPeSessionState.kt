@@ -25,6 +25,7 @@ import world.crafty.skinpool.protocol.client.HashPollPoolPacket
 import world.crafty.skinpool.protocol.client.SaveSkinPoolPacket
 import world.crafty.skinpool.protocol.server.HashPollReplyPoolPacket
 import java.security.MessageDigest
+import java.time.Duration
 import java.util.*
 import javax.crypto.KeyAgreement
 import javax.crypto.spec.SecretKeySpec
@@ -111,4 +112,6 @@ class LoginPeSessionState(session: PeNetworkSession) : PeSessionState(session) {
             }
         }
     }
+
+    override val pingTimeout: Duration = Duration.ofMillis(10_000)
 }

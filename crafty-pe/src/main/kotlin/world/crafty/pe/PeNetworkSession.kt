@@ -44,7 +44,7 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
         eb = vertx.eventBus()
         vertx.setPeriodic(10) { _ -> processPacketSendQueue() }
         vertx.setPeriodic(5000) {
-            if(lastPing.sinceThen() > Duration.ofMillis(5500))
+            if(lastPing.sinceThen() > state.pingTimeout)
                 disconnect("Timeout")
         }
     }
@@ -87,7 +87,6 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
             is ConnectedPingPePacket -> {
                 val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
                 lastPing = Instant.now()
-                log.info { "Ping from client ${deploymentID()}!" }
                 send(response, UNRELIABLE)
             }
             is EncryptionWrapperPePacket -> {

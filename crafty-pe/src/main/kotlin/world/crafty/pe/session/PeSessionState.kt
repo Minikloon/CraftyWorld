@@ -9,6 +9,7 @@ import world.crafty.common.vertx.CurrentVertx
 import world.crafty.common.vertx.typedConsumer
 import world.crafty.pe.PeNetworkSession
 import world.crafty.pe.proto.PePacket
+import java.time.Duration
 import kotlin.reflect.KClass
 
 abstract class PeSessionState(val session: PeNetworkSession) {
@@ -51,6 +52,8 @@ abstract class PeSessionState(val session: PeNetworkSession) {
         consumers.forEach { it.unregister() }
         onStop()
     }
+    
+    open val pingTimeout = Duration.ofMillis(5500)
     
     suspend open fun onDisconnect(message: String) {}
 

@@ -9,6 +9,7 @@ import world.crafty.pe.proto.packets.client.NewIncomingConnection
 import world.crafty.pe.proto.packets.server.ConnectionRequestAcceptPePacket
 import world.crafty.pe.raknet.RakMessageReliability
 import world.crafty.pe.session.PeSessionState
+import java.time.Duration
 
 private val log = logger<ConnectionPeSessionState>()
 class ConnectionPeSessionState(session: PeNetworkSession) : PeSessionState(session) {
@@ -33,4 +34,6 @@ class ConnectionPeSessionState(session: PeNetworkSession) : PeSessionState(sessi
             }
         }
     }
+
+    override val pingTimeout: Duration = Duration.ofMillis(7_000)
 }
