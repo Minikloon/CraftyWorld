@@ -1,7 +1,12 @@
-[
+/*
+  Example account:
   {
     "username": "username@gmail.com",
     "password": "CHANGETHIS",
     "uuid": "https://mcuuid.net/"
   }
+*/
+
+[
+  
 ]

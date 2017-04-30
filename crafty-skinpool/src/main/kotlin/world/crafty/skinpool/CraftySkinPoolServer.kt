@@ -1,5 +1,6 @@
 package world.crafty.skinpool
 
+import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.json.Json
@@ -36,7 +37,11 @@ class CraftySkinPoolServer private constructor(
         Json.mapper.registerKotlinModule()
         registerVertxSkinPoolCodecs(eb)
         
-        launch(CurrentVertx) start@ {
+        launch(CurrentVertx) launch@ {
+            if(accounts.isEmpty()) {
+                log.error { "No account provided for skin pool, make sure to add at least one in $accountsFile!" }
+            }
+            
             accounts.map {
                 val mojangClient = MojangClient(vertx)
                 val authFuture = async(CurrentVertx) { mojangClient.authenticateAsync(it.username, it.password) }
@@ -121,6 +126,7 @@ class CraftySkinPoolServer private constructor(
         
         fun startFromConsole() : CraftySkinPoolServer {
             Json.mapper.registerKotlinModule()
+            Json.mapper.enable(JsonParser.Feature.ALLOW_COMMENTS)
             
             val accountsPath = Paths.get(accountsFile)
             if(! Files.exists(accountsPath)) {

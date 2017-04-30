@@ -3,6 +3,7 @@ version '1.0-SNAPSHOT'
 
 repositories {
     jcenter()
+    maven { url 'https://jitpack.io' }
 }
 
 dependencies {
@@ -10,6 +11,6 @@ dependencies {
     compile "io.vertx:vertx-web-client:3.4.1"
     compile "org.joml:joml:1.9.2"
     compile "com.fasterxml.jackson.module:jackson-module-kotlin:2.8.7"
-    compile "com.fasterxml.jackson.core:jackson-databind:2.8.7" // override vert.x
+    compile "com.fasterxml.jackson.core:jackson-databind:2.8.7" // override vert.x's
     compile "org.slf4j:slf4j-api:1.7.25"
 }
