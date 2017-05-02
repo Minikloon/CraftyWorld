@@ -30,7 +30,6 @@ class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
     val metaTranslatorRegistry = MetaTranslatorRegistry()
 
     private val sessions = ConcurrentHashMap<SocketAddress, CompletableFuture<PeNetworkSession>>()
-    private val disconnectedRecently = ConcurrentHashMap<SocketAddress, Instant>()
     
     val keyPair = {
         val keyGen = KeyPairGenerator.getInstance("EC")
@@ -52,8 +51,6 @@ class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
             if(it.succeeded()) {
                 socket.handler { datagram ->
                     val sender = datagram.sender()
-                    if(disconnectedRecently.containsKey(sender))
-                        return@handler
                     val getSession = sessions.getOrPut(sender) {
                         val future = CompletableFuture<PeNetworkSession>()
                         val session = PeNetworkSession(this, worldServer, socket, sender)
@@ -71,12 +68,6 @@ class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
                 throw it.cause()
             }
         }
-        
-        vertx.setPeriodic(5000) {
-            disconnectedRecently.values.removeIf { 
-                it.sinceThen() > Duration.ofSeconds(10)
-            }
-        }
     }
     
     fun getWorldCache(worldName: String) : ConcurrentColumnsCache<EncryptionWrapperPePacket> {
@@ -84,7 +75,6 @@ class PeConnectionServer(val port: Int, val worldServer: String) : AbstractVerti
     }
     
     fun removeSessionSocket(sender: SocketAddress) {
-        disconnectedRecently.put(sender, Instant.now())
         sessions.remove(sender)
     }
 }

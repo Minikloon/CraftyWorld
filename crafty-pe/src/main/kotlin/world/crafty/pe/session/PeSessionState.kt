@@ -27,8 +27,17 @@ abstract class PeSessionState(val session: PeNetworkSession) {
     suspend abstract fun handle(packet: PePacket)
 
     fun unexpectedPacket(packet: PePacket) {
-        logger(this).warn { "${session.address} sent an unexpected packet of type ${packet::class.simpleName} during login!" }
+        logger(this).warn { "${session.address} sent an unexpected packet of type ${packet::class.simpleName} during ${javaClass.simpleName}!" }
         session.disconnect("Connection error")
+    }
+    
+    fun setTimer(millis: Long, action: suspend() -> Unit) {
+        val timerId = session.server.vertx.setPeriodic(millis) {
+            launch(CurrentVertx) {
+                action()
+            }
+        }
+        timerIds.add(timerId)
     }
 
     fun setPeriodic(millis: Long, action: suspend () -> Unit) {
@@ -52,8 +61,6 @@ abstract class PeSessionState(val session: PeNetworkSession) {
         consumers.forEach { it.unregister() }
         onStop()
     }
-    
-    open val pingTimeout = Duration.ofMillis(5500)
     
     suspend open fun onDisconnect(message: String) {}
 

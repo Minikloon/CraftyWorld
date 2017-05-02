@@ -4,17 +4,23 @@ import io.vertx.core.net.impl.SocketAddressImpl
 import world.crafty.common.utils.logger
 import world.crafty.pe.PeNetworkSession
 import world.crafty.pe.proto.PePacket
+import world.crafty.pe.proto.packets.client.ConnectedPingPePacket
 import world.crafty.pe.proto.packets.client.ConnectionRequestPePacket
-import world.crafty.pe.proto.packets.client.NewIncomingConnection
 import world.crafty.pe.proto.packets.server.ConnectionRequestAcceptPePacket
 import world.crafty.pe.raknet.RakMessageReliability
 import world.crafty.pe.session.PeSessionState
-import java.time.Duration
 
 private val log = logger<ConnectionPeSessionState>()
 class ConnectionPeSessionState(session: PeNetworkSession) : PeSessionState(session) {
+    suspend override fun onStart() {
+        super.onStart()
+    }
+    
     suspend override fun handle(packet: PePacket) {
         when(packet) {
+            is ConnectedPingPePacket -> {
+                session.disconnect("Premature connected ping")
+            }
             is ConnectionRequestPePacket -> {
                 val response = ConnectionRequestAcceptPePacket(
                         systemAddress = SocketAddressImpl(19132, "127.0.0.1"),
@@ -24,16 +30,11 @@ class ConnectionPeSessionState(session: PeNetworkSession) : PeSessionState(sessi
                         serverTimestamp = System.currentTimeMillis()
                 )
                 session.send(response, RakMessageReliability.RELIABLE)
-            }
-            is NewIncomingConnection -> {
-                log.info { "A client at ${session.address} is now officially connected!" }
-                session.switchState(LoginPeSessionState(session))
+                session.switchState(NewConnectionPeSessionState(session))
             }
             else -> {
                 unexpectedPacket(packet)
             }
         }
     }
-
-    override val pingTimeout: Duration = Duration.ofMillis(7_000)
 }

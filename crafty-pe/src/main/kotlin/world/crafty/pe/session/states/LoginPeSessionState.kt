@@ -10,6 +10,7 @@ import world.crafty.pe.isSlim
 import world.crafty.pe.jwt.payloads.CertChainLink
 import world.crafty.pe.jwt.payloads.PeClientData
 import world.crafty.pe.proto.PePacket
+import world.crafty.pe.proto.packets.client.ConnectedPingPePacket
 import world.crafty.pe.proto.packets.client.EntityFallPePacket
 import world.crafty.pe.proto.packets.client.LoginPePacket
 import world.crafty.pe.proto.packets.mixed.LevelSoundEventPePacket
@@ -31,12 +32,15 @@ import javax.crypto.KeyAgreement
 import javax.crypto.spec.SecretKeySpec
 
 private val log = logger<LoginPeSessionState>()
-class LoginPeSessionState(session: PeNetworkSession) : PeSessionState(session) {
+class LoginPeSessionState(session: PeNetworkSession) : ConnectedPeSessionState(session) {
     val server = session.server
     val eb = session.vertx.eventBus()
     
     suspend override fun handle(packet: PePacket) {
         when(packet) {
+            is ConnectedPingPePacket -> {
+                onPing(packet)
+            }
             is LoginPePacket -> {
                 val chain = packet.certChain
 
@@ -100,12 +104,6 @@ class LoginPeSessionState(session: PeNetworkSession) : PeSessionState(session) {
                     log.info { "Login from ${session.address} ${packet.protocolVersion} ${packet.edition}" }
                     session.switchState(PlayPeSessionState(session, loginExtraData, loginClientData, craftySkin))
                 }
-            }
-            is EntityFallPePacket -> {
-                
-            }
-            is LevelSoundEventPePacket -> {
-                
             }
             else -> {
                 unexpectedPacket(packet)

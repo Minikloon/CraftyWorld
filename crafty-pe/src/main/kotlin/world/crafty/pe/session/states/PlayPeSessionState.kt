@@ -15,10 +15,7 @@ import world.crafty.pe.proto.PeItem
 import world.crafty.pe.proto.PePacket
 import world.crafty.pe.proto.PeSkin
 import world.crafty.pe.proto.packets.client.*
-import world.crafty.pe.proto.packets.mixed.ChatPePacket
-import world.crafty.pe.proto.packets.mixed.ChatType
-import world.crafty.pe.proto.packets.mixed.MoveMode
-import world.crafty.pe.proto.packets.mixed.SetPlayerLocPePacket
+import world.crafty.pe.proto.packets.mixed.*
 import world.crafty.pe.proto.packets.server.*
 import world.crafty.pe.raknet.RakMessageReliability
 import world.crafty.pe.session.PeSessionState
@@ -38,7 +35,7 @@ class PlayPeSessionState(
         val loginExtraData: LoginExtraData,
         val loginClientData: PeClientData,
         val craftySkin: CraftySkin
-) : PeSessionState(session) {
+) : ConnectedPeSessionState(session) {
     private val eb = session.vertx.eventBus()
     
     private var craftyPlayerId = 0
@@ -49,6 +46,9 @@ class PlayPeSessionState(
     
     suspend override fun handle(packet: PePacket) {
         when(packet) {
+            is ConnectedPingPePacket -> {
+                onPing(packet)
+            }
             is ResourcePackClientResponsePePacket -> {
                 val startGame: suspend () -> Unit = {
                     val username = loginExtraData.displayName
@@ -170,6 +170,12 @@ class PlayPeSessionState(
             is ChatPePacket -> {
                 sendCrafty(ChatFromClientCraftyPacket(packet.text))
             }
+            is EntityFallPePacket -> {
+
+            }
+            is LevelSoundEventPePacket -> {
+
+            }
             else -> {
                 log.warn { "Unhandled pe message ${packet.javaClass.simpleName}" }
             }
@@ -279,9 +285,7 @@ class PlayPeSessionState(
         }
     }
 
-    suspend override fun onDisconnect(message: String) {
-        log.info { "Disconnected PE ${loginExtraData.displayName} ($message)" }
-        
+    suspend override fun onDisconnect(message: String) {        
         try {
             eb.send("${session.worldServer}:quit", QuitCraftyPacket(craftyPlayerId))
         } catch(e: Exception) {

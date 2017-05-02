@@ -36,17 +36,11 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
     private val packetSendQueue = mutableListOf<PePacket>()
     
     private lateinit var eb: EventBus
-    
-    private var lastPing = Instant.now()
 
     override fun onStart(vertx: Vertx) {
         state = ConnectionPeSessionState(this)
         eb = vertx.eventBus()
         vertx.setPeriodic(10) { _ -> processPacketSendQueue() }
-        vertx.setPeriodic(5000) {
-            if(lastPing.sinceThen() > state.pingTimeout)
-                disconnect("Timeout")
-        }
     }
 
     override fun getUnconnectedPongExtraData(serverId: Long): ByteArray {
@@ -84,11 +78,6 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
         if(message !is EncryptionWrapperPePacket && message !is CompressionWrapperPePacket && message !is SetPlayerLocPePacket && message !is ConnectedPingPePacket)
             log.trace { "HANDLE ${message::class.simpleName}" }
         when(message) {
-            is ConnectedPingPePacket -> {
-                val response = ConnectedPongPePacket(message.pingTimestamp, System.currentTimeMillis())
-                lastPing = Instant.now()
-                send(response, UNRELIABLE)
-            }
             is EncryptionWrapperPePacket -> {
                 val payload = encryptionPass.decrypt(message.payload)
                 val payloadStream = MinecraftInputStream(payload)
@@ -148,6 +137,8 @@ class PeNetworkSession(val server: PeConnectionServer, val worldServer: String, 
         if(disconnected)
             return
         disconnected = true
+
+        log.info { "Disconnected PE $address ($message)" }
         
         send(EncryptionWrapperPePacket(DisconnectPePacket(message)), RELIABLE, immediate = true)
         launch(CurrentVertx) {
