@@ -23,7 +23,7 @@ class JsonMessageCodec<T: Any>(private val clazz: KClass<T>) : MessageCodec<T, T
     }
 
     override fun name(): String {
-        return "json:${clazz::qualifiedName}"
+        return "json:${clazz.qualifiedName}"
     }
 
     override fun decodeFromWire(pos: Int, buffer: Buffer): T {
