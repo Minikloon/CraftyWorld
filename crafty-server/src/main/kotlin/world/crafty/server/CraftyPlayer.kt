@@ -118,6 +118,11 @@ class CraftyPlayer(
                 PlayerAction.STOP_SNEAK -> {
                     entity?.metaPlayer?.crouched = false
                 }
+                PlayerAction.SWING_ARM -> {
+                    server.players.filter { it != this }.forEach {
+                        it.send(PlayerAnimationCraftyPacket(entityId, Animation.SWING_ARM))
+                    }
+                }
                 else -> {
                     log.info { "Crafty Unimplemented action $action" }
                 }

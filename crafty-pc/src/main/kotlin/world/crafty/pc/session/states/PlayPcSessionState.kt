@@ -139,6 +139,9 @@ class PlayPcSessionState(
             is PlayerTeleportConfirmPcPacket -> {
                 log.info { "teleport confirm ${packet.confirmId}" }
             }
+            is SwingArmPcPacket -> {
+                sendCrafty(PlayerActionCraftyPacket(PlayerAction.SWING_ARM))
+            }
             else -> {
                 log.error { "Unhandled Play packet ${packet.javaClass.simpleName}" }
             }
@@ -243,6 +246,18 @@ class PlayPcSessionState(
         
         craftyConsumer(DisconnectPlayerCraftyPacket::class) {
             session.disconnect(it.message)
+        }
+        
+        craftyConsumer(PlayerAnimationCraftyPacket::class) {
+            val anim = when(it.animation) {
+                Animation.SWING_ARM -> PcAnimation.SWING_MAIN_ARM
+                else -> throw NotImplementedError("Missing animation mapping for crafty ${it.animation}")
+            }
+            
+            session.send(AnimationPcPacket(
+                    entityId = it.entityId,
+                    animation = anim
+            ))
         }
     }
     

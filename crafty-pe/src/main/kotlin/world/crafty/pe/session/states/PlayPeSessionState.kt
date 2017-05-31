@@ -176,6 +176,9 @@ class PlayPeSessionState(
             is LevelSoundEventPePacket -> {
 
             }
+            is AnimationPePacket -> {
+                sendCrafty(PlayerActionCraftyPacket(PlayerAction.SWING_ARM))
+            }
             else -> {
                 log.warn { "Unhandled pe message ${packet.javaClass.simpleName}" }
             }
@@ -255,6 +258,15 @@ class PlayPeSessionState(
         
         craftyConsumer(DisconnectPlayerCraftyPacket::class) {
             session.disconnect(it.message)
+        }
+        
+        craftyConsumer(PlayerAnimationCraftyPacket::class) {
+            val anim = when(it.animation) {
+                Animation.SWING_ARM -> PeAnimation.SWING_ARM
+                else -> throw NotImplementedError("Unmapped server->client ${it.animation}")
+            }
+            
+            session.queueSend(AnimationPePacket(it.entityId.toLong(), anim))
         }
     }
 

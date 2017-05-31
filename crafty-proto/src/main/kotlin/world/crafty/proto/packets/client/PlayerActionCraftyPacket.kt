@@ -27,5 +27,6 @@ enum class PlayerAction {
     START_SPRINT,
     STOP_SPRINT,
     DROP_ITEM,
-    LEAVE_BED
+    LEAVE_BED,
+    SWING_ARM
 }

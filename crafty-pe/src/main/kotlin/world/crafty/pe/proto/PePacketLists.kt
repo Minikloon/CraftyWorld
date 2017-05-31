@@ -3,7 +3,6 @@ package world.crafty.pe.proto
 import world.crafty.pe.proto.packets.client.ConnectedPingPePacket
 import world.crafty.pe.proto.packets.client.*
 import world.crafty.pe.proto.packets.mixed.*
-import world.crafty.pe.proto.packets.server.*
 import world.crafty.pe.raknet.packets.*
 
 object ServerBoundPeRaknetPackets : InboundPePacketList() {
@@ -39,7 +38,8 @@ object ServerBoundPeWrappedPackets : InboundPePacketList() {
                 SetPlayerLocPePacket.Codec,
                 ChatPePacket.Codec,
                 LevelSoundEventPePacket.Codec,
-                EntityFallPePacket.Codec
+                EntityFallPePacket.Codec,
+                AnimationPePacket.Codec
         )
     }
 }

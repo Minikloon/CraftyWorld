@@ -35,6 +35,7 @@ object ServerBoundPcPlayPackets : InboundPcPacketList() {
             PlayerPositionPcPacket,
             PlayerPosAndLookPcPacket,
             PlayerLookPcPacket,
-            EntityActionPcPacket
+            EntityActionPcPacket,
+            SwingArmPcPacket
     )
 }
