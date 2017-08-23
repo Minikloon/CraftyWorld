@@ -15,7 +15,16 @@ fun main(args: Array<String>) {
     writeLogo()
     bootstrapLogging()
     val vertx = Vertx.vertx()
-    
+
+    val world = try {
+        val directory = "lobby"
+        timedLoadWorld(directory)
+    } catch(e: Exception) {
+        e.printStackTrace()
+        System.exit(1)
+        return
+    }
+
     val skinPool = try {
         CraftySkinPoolServer.startFromConsole()
     } catch(e: Exception) {
@@ -25,15 +34,6 @@ fun main(args: Array<String>) {
     }
 
     vertx.deployVerticle(skinPool)
-
-    val world = try {
-        val directory = "neus"
-        timedLoadWorld(directory)
-    } catch(e: Exception) {
-        e.printStackTrace()
-        System.exit(1)
-        return
-    }
 
     val craftyServer = CraftyServer("worldServer:test", world)
     vertx.deployVerticle(craftyServer)

@@ -4,6 +4,9 @@ version '1.0-SNAPSHOT'
 buildscript {
     repositories {
         jcenter()
+        maven {
+            url  "http://dl.bintray.com/kittinunf/maven"
+        }
     }
     dependencies {
         classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
@@ -15,6 +18,7 @@ apply plugin: 'com.github.johnrengelman.shadow'
 dependencies {
     compile "org.apache.logging.log4j:log4j-core:2.8.1"
     compile "org.apache.logging.log4j:log4j-slf4j-impl:2.8.1"
+    compile 'com.github.kittinunf.fuel:fuel:1.8.0'
     compile project(":crafty-pe")
     compile project(":crafty-pc")
     compile project(":crafty-server")
