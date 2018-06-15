@@ -76,7 +76,7 @@ fun readChunk(nbt: NbtCompound) : CraftyChunkColumn {
 
         chunks[sectionY] = section
     }
-    
+
     return CraftyChunkColumn(chunkX, chunkZ, chunks, biomes)
 }
 

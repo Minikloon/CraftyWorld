@@ -5,6 +5,7 @@
     <content url="file://$MODULE_DIR$/../../../crafty-common">
       <excludeFolder url="file://$MODULE_DIR$/../../../crafty-common/.gradle" />
       <excludeFolder url="file://$MODULE_DIR$/../../../crafty-common/build" />
+      <excludeFolder url="file://$MODULE_DIR$/../../../crafty-common/out" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

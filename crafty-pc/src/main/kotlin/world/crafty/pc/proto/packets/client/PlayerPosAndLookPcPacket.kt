@@ -15,7 +15,7 @@ class PlayerPosAndLookPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x0D
+        override val id = 0x0E
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PlayerPosAndLookPcPacket) throw IllegalArgumentException()
             stream.writeDouble(obj.x)

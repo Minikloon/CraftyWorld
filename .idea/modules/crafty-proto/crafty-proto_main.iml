@@ -8,7 +8,6 @@
           <option name="noStdlib" value="true" />
           <option name="noReflect" value="true" />
           <option name="moduleName" value="crafty-proto_main" />
-          <option name="jvmTarget" value="1.6" />
           <option name="addCompilerBuiltIns" value="true" />
           <option name="languageVersion" value="1.1" />
           <option name="apiVersion" value="1.1" />
@@ -24,7 +23,7 @@
     </facet>
   </component>
   <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_1_8">
-    <output url="file://$MODULE_DIR$/../../../crafty-proto/build/classes/main" />
+    <output url="file://$MODULE_DIR$/../../../crafty-proto/out/production/classes" />
     <exclude-output />
     <content url="file://$MODULE_DIR$/../../../crafty-proto/src/main">
       <sourceFolder url="file://$MODULE_DIR$/../../../crafty-proto/src/main/java" isTestSource="false" />

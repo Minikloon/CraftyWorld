@@ -13,7 +13,7 @@ class PlayerPositionPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x0C
+        override val id = 0x0D
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PlayerPositionPcPacket) throw IllegalArgumentException()
             stream.writeDouble(obj.x)

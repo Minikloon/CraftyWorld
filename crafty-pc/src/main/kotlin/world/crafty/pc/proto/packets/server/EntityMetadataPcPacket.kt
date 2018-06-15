@@ -12,7 +12,7 @@ class EntityMetadataPcPacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PcPacketCodec() {
-        override val id = 0x39
+        override val id = 0x3E
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is EntityMetadataPcPacket) throw IllegalArgumentException()
             stream.writeSignedVarInt(obj.entityId)

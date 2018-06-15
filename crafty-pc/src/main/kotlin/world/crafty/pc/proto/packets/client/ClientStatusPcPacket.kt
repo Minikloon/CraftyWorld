@@ -11,7 +11,7 @@ class ClientStatusPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x03
+        override val id = 0x02
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientStatusPcPacket) throw IllegalArgumentException()
             stream.writeSignedVarInt(obj.action.ordinal)

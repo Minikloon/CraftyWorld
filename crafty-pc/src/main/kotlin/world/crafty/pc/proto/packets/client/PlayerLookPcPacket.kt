@@ -12,7 +12,7 @@ class PlayerLookPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x0E
+        override val id = 0x0F
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PlayerLookPcPacket) throw IllegalArgumentException()
             stream.writeFloat(obj.yaw)

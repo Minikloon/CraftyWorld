@@ -1,13 +1,16 @@
 package world.crafty.pc.session.states
 
+import io.netty.buffer.ByteBuf
+import io.netty.buffer.Unpooled
 import io.vertx.core.eventbus.Message
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.joml.Vector3f
+import sun.misc.HexDumpEncoder
 import world.crafty.common.Angle256
 import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
-import world.crafty.common.utils.logger
+import world.crafty.common.utils.*
 import world.crafty.common.vertx.CurrentVertx
 import world.crafty.common.vertx.typedConsumer
 import world.crafty.common.vertx.typedSend
@@ -21,6 +24,8 @@ import world.crafty.pc.proto.ServerBoundPcPlayPackets
 import world.crafty.pc.proto.packets.client.*
 import world.crafty.pc.proto.packets.server.*
 import world.crafty.pc.session.PcSessionState
+import world.crafty.pc.world.PcChunk
+import world.crafty.pc.world.PcChunkColumn
 import world.crafty.pc.world.toPcPacket
 import world.crafty.proto.CraftyChunkColumn
 import world.crafty.proto.CraftyPacket
@@ -29,6 +34,7 @@ import world.crafty.proto.packets.server.*
 import world.crafty.skinpool.CraftySkinPoolServer
 import world.crafty.skinpool.protocol.client.HashPollPoolPacket
 import world.crafty.skinpool.protocol.server.HashPollReplyPoolPacket
+import java.nio.ByteOrder
 import kotlin.reflect.KClass
 
 private val log = logger<PlayPcSessionState>()
@@ -50,7 +56,7 @@ class PlayPcSessionState(
 
     suspend override fun onStart() {
         ownEntityId = prespawn.entityId
-        location = prespawn.spawnLocation
+        location = prespawn.spawnLocation.add(0f, 70f, 0f)
         session.send(JoinGamePcPacket(
                 eid = prespawn.entityId,
                 gamemode = prespawn.gamemode,
@@ -63,8 +69,10 @@ class PlayPcSessionState(
         session.send(ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
 
         registerCraftyConsumers()
+
+        session.send(SetPlayerAbilitiesPcPacket(0b1100, 0.1f, 0.05f))
         
-        val chunkRadiusReq = ChunksRadiusRequestCraftyPacket(prespawn.spawnLocation.positionVec3(), 0, 8)
+        val chunkRadiusReq = ChunksRadiusRequestCraftyPacket(location.positionVec3(), 0, 4)
         val chunkRadiusRes = sendCraftyAsync<ChunksRadiusResponseCraftyPacket>(chunkRadiusReq).body()
         val cache = server.getWorldCache(session.worldServer)
         chunkRadiusRes.chunkColumns.forEach { setColumn ->
@@ -73,6 +81,28 @@ class PlayPcSessionState(
                 ChunkCacheStategy.PER_PLAYER -> setColumn.chunkColumn.toPcPacket()
             }
             session.send(chunkPacket)
+            /*val c = setColumn.chunkColumn
+
+            val chunks = Array<PcChunk?>(16) { index ->
+                val data = LongPackedArray(14, 16 * 16 * 16)
+                val light = NibbleArray(16 * 16 * 16)
+                for(i in 0 until 16*16*16) {
+                    light[i] = 15
+                }
+                if(index == 0 || index == 1) {
+                    for(i in 0 until 16*16*16) {
+                        data[i] = 1
+                    }
+                    PcChunk(data, light, light)
+                } else {
+                    PcChunk(data, light, light)
+                }
+            }
+            val fakeChunk = PcChunkColumn(c.x, c.z,
+                    chunks,
+                    IntArray(256) { 1 })
+            val fakePacket = fakeChunk.toPacket()
+            session.send(fakePacket)*/
         }
 
         sendCrafty(ReadyToSpawnCraftyPacket())
@@ -197,8 +227,8 @@ class PlayPcSessionState(
                     entityId = packet.entityId,
                     headYaw = packet.location.headYaw
             ))
-            delay(2000)
-            session.send(PlayerListItemPcPacket(PlayerListAction.REMOVE, listOf(PlayerListPcRemove(packet.uuid))))
+            //delay(2000)
+            //session.send(PlayerListItemPcPacket(PlayerListAction.REMOVE, listOf(PlayerListPcRemove(packet.uuid))))
         }
         
         craftyConsumer(RemovePlayerCraftyPacket::class) { packet ->
@@ -237,11 +267,11 @@ class PlayPcSessionState(
                     )
             ))
             session.send(TeleportPlayerPcPacket(location, relativeFlags = 0, confirmId = 1))
-            delay(2000)
+            /*delay(2000)
             session.send(PlayerListItemPcPacket(
                     action = PlayerListAction.REMOVE,
                     items = listOf(PlayerListPcRemove(profile.uuid))
-            ))
+            ))*/
         }
         
         craftyConsumer(DisconnectPlayerCraftyPacket::class) {

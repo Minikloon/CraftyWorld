@@ -42,7 +42,7 @@ class PcNetworkSession(val connServer: PcConnectionServer, val worldServer: Stri
         val bs = BufferOutputStream(buffer)
         val stream = encryptionPass.encryptionStream(bs)
         content.serializeWithLengthPrefix(stream, compressionPass.compressing, compressionPass.threshold)
-        
+
         try {
             socket.write(buffer)
         } catch(e: Exception) {

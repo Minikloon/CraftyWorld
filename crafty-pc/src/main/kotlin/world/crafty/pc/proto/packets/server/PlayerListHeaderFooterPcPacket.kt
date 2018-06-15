@@ -13,7 +13,7 @@ class PlayerListHeaderFooterPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x47
+        override val id = 0x4D
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is PlayerListHeaderFooterPcPacket) throw IllegalArgumentException()
             stream.writeJson(obj.header)

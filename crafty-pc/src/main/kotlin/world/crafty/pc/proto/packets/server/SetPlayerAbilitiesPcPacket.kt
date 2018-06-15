@@ -12,7 +12,7 @@ class SetPlayerAbilitiesPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x2B
+        override val id = 0x2D
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetPlayerAbilitiesPcPacket) throw IllegalArgumentException()
             stream.writeByte(obj.flags)

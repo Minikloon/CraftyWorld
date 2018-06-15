@@ -17,7 +17,7 @@ class JoinGamePcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x23
+        override val id = 0x24
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is JoinGamePcPacket) throw IllegalArgumentException()
             stream.writeInt(obj.eid)

@@ -15,7 +15,7 @@ class TeleportPlayerPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x2E
+        override val id = 0x31
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is TeleportPlayerPcPacket) throw IllegalArgumentException()
             stream.writePcLocationFloatAngles(obj.loc)

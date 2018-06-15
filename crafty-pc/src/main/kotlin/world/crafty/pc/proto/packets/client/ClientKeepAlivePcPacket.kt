@@ -5,7 +5,7 @@ import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.pc.proto.PcPacket
 
 class ClientKeepAlivePcPacket(
-        val confirmId: Int
+        val confirmId: Long
 ) : PcPacket() {
     override val id = Codec.id
     override val codec = Codec
@@ -13,11 +13,11 @@ class ClientKeepAlivePcPacket(
         override val id = 0x0B
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientKeepAlivePcPacket) throw IllegalArgumentException()
-            stream.writeSignedVarInt(obj.confirmId)
+            stream.writeLong(obj.confirmId)
         }
         override fun deserialize(stream: MinecraftInputStream): PcPacket {
             return ClientKeepAlivePcPacket(
-                    confirmId = stream.readSignedVarInt()
+                    confirmId = stream.readLong()
             )
         }
     }

@@ -52,7 +52,7 @@ public final class LongPackedArray {
             words[wordIndex] = words[wordIndex] & ~((1L << i2 - bitsPerWord) - 1L) | value >> bitsPerWord - shifts;
         }
     }
-    
+
     public static int requiredLongs(int bitsPerValue, int capacity) {
         return (int) Math.ceil((bitsPerValue * capacity) / bitsPerWord);
     }

@@ -2,12 +2,9 @@ package world.crafty.proto.packets.server
 
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
-import world.crafty.common.utils.CompressionAlgorithm
-import world.crafty.common.utils.compressed
 import world.crafty.proto.CraftyChunk
 import world.crafty.proto.CraftyChunkColumn
 import world.crafty.proto.CraftyPacket
-import world.crafty.proto.MinecraftPlatform
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater

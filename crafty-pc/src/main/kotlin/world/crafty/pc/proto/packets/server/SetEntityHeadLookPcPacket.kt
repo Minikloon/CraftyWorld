@@ -12,7 +12,7 @@ class SetEntityHeadLookPcPacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PcPacketCodec() {
-        override val id = 0x34
+        override val id = 0x38
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetEntityHeadLookPcPacket) throw IllegalArgumentException()
             stream.writeSignedVarInt(obj.entityId)

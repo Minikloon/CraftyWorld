@@ -37,8 +37,8 @@ class CraftyPlayer(
     val entityId = server.world.nextEntityId()
     var entity: PlayerEntity? = null // TODO: split this class into spawned/unspawned to avoid null checks
     
-    private val pings = mutableMapOf<Int, CraftyPing>()
-    private var pingCounter = 0
+    private val pings = mutableMapOf<Long, CraftyPing>()
+    private var pingCounter = 0L
 
     private val timerIds = mutableSetOf<Long>() // TODO: make player a verticle to avoid this shit?
     private val consumers = mutableSetOf<MessageConsumer<*>>()
@@ -169,6 +169,6 @@ class CraftyPlayer(
 }
 
 private data class CraftyPing(
-        val id: Int,
+        val id: Long,
         val timestamp: Instant
 )
