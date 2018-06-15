@@ -16,6 +16,7 @@ import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.packets.client.*
 import world.crafty.proto.packets.server.*
 import world.crafty.server.entity.PlayerEntity
+import world.crafty.server.entity.HorseEntity
 import java.time.Duration
 import java.time.Instant
 import java.util.*
@@ -64,6 +65,12 @@ class CraftyPlayer(
             val text = "$username > ${it.text}"
             server.players.forEach {
                 it.send(ChatMessageCraftyPacket(text))
+            }
+
+            if(it.text == "e") {
+                entity?.let { entity ->
+                    server.world.spawn { world, id -> HorseEntity(world, id, entity.location) }
+                }
             }
         }
 

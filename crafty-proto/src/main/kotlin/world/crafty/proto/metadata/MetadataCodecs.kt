@@ -2,6 +2,7 @@ package world.crafty.proto.metadata
 
 import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
+import java.util.*
 
 class NullableCodec(val inner: MetaCodec) : MetaCodec {
     override fun serialize(obj: Any?, stream: MinecraftOutputStream) {
@@ -58,5 +59,15 @@ object StringCodec : MetaCodec {
     }
     override fun deserialize(stream: MinecraftInputStream): Any? {
         return stream.readUnsignedString()
+    }
+}
+
+object UuidCodec : MetaCodec {
+    override fun serialize(obj: Any?, stream: MinecraftOutputStream) {
+        if(obj !is UUID) throw IllegalArgumentException()
+        stream.writeUuid(obj)
+    }
+    override fun deserialize(stream: MinecraftInputStream): Any? {
+        return stream.readUuid()
     }
 }

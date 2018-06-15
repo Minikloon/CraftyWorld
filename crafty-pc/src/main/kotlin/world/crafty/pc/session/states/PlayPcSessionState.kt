@@ -35,6 +35,7 @@ import world.crafty.skinpool.CraftySkinPoolServer
 import world.crafty.skinpool.protocol.client.HashPollPoolPacket
 import world.crafty.skinpool.protocol.server.HashPollReplyPoolPacket
 import java.nio.ByteOrder
+import java.util.*
 import kotlin.reflect.KClass
 
 private val log = logger<PlayPcSessionState>()
@@ -56,7 +57,7 @@ class PlayPcSessionState(
 
     suspend override fun onStart() {
         ownEntityId = prespawn.entityId
-        location = prespawn.spawnLocation.add(0f, 70f, 0f)
+        location = prespawn.spawnLocation
         session.send(JoinGamePcPacket(
                 eid = prespawn.entityId,
                 gamemode = prespawn.gamemode,
@@ -81,28 +82,6 @@ class PlayPcSessionState(
                 ChunkCacheStategy.PER_PLAYER -> setColumn.chunkColumn.toPcPacket()
             }
             session.send(chunkPacket)
-            /*val c = setColumn.chunkColumn
-
-            val chunks = Array<PcChunk?>(16) { index ->
-                val data = LongPackedArray(14, 16 * 16 * 16)
-                val light = NibbleArray(16 * 16 * 16)
-                for(i in 0 until 16*16*16) {
-                    light[i] = 15
-                }
-                if(index == 0 || index == 1) {
-                    for(i in 0 until 16*16*16) {
-                        data[i] = 1
-                    }
-                    PcChunk(data, light, light)
-                } else {
-                    PcChunk(data, light, light)
-                }
-            }
-            val fakeChunk = PcChunkColumn(c.x, c.z,
-                    chunks,
-                    IntArray(256) { 1 })
-            val fakePacket = fakeChunk.toPacket()
-            session.send(fakePacket)*/
         }
 
         sendCrafty(ReadyToSpawnCraftyPacket())
@@ -227,8 +206,6 @@ class PlayPcSessionState(
                     entityId = packet.entityId,
                     headYaw = packet.location.headYaw
             ))
-            //delay(2000)
-            //session.send(PlayerListItemPcPacket(PlayerListAction.REMOVE, listOf(PlayerListPcRemove(packet.uuid))))
         }
         
         craftyConsumer(RemovePlayerCraftyPacket::class) { packet ->
@@ -267,11 +244,10 @@ class PlayPcSessionState(
                     )
             ))
             session.send(TeleportPlayerPcPacket(location, relativeFlags = 0, confirmId = 1))
-            /*delay(2000)
-            session.send(PlayerListItemPcPacket(
-                    action = PlayerListAction.REMOVE,
-                    items = listOf(PlayerListPcRemove(profile.uuid))
-            ))*/
+
+            session.send(ScoreboardObjectivePcPacket("test", ScoreboardObjectiveAction.CREATE, "Hello!", 0))
+            session.send(DisplayScoreboardPcPacket(ScoreboardPosition.SIDEBAR, "test"))
+            session.send(UpdateScorePcPacket("Test line", UpdateScoreAction.UPSERT, "test", 0))
         }
         
         craftyConsumer(DisconnectPlayerCraftyPacket::class) {
@@ -288,6 +264,57 @@ class PlayPcSessionState(
                     entityId = it.entityId,
                     animation = anim
             ))
+        }
+
+        craftyConsumer(AddEntityCraftyPacket::class) {
+            val pcEntity = PcEntity(it.entityId, it.location)
+            loadedEntities[it.entityId] = pcEntity
+            val metadata = pcEntity.metaFromCrafty(server.metaTranslatorRegistry, it.meta)
+            val uuid = UUID.randomUUID()
+            println("spawn entity with id ${it.entityId} for ${profile.name}")
+            /*session.send(SpawnMobPcPacket(
+                    it.entityId,
+                    uuid,
+                    29, // 29 = horse, bat = 3
+                    it.location.x.toDouble(),
+                    it.location.y.toDouble(),
+                    it.location.z.toDouble(),
+                    it.location.bodyYaw,
+                    Angle256.zero,
+                    it.location.headPitch,
+                    0, 0, 0,
+                    metadata
+            ))*/
+            session.send(SpawnObjectPcPacket(
+                    it.entityId,
+                    uuid,
+                    78, // 78 = armor stand,
+                    it.location,
+                    0,
+                    0, 0, 0
+            ))
+
+            if(profile.name == "Minikloon") {
+                delay(100)
+                val vehicleId = it.entityId
+                server.sessions.values.forEach { otherSession ->
+                    if(otherSession == this.session) {
+                        otherSession.send(SetPassengersPcPacket(vehicleId, listOf(ownEntityId)))
+                        println("sent set passenger to ${(otherSession.state as PlayPcSessionState).profile.name} $ownEntityId")
+                    } else {
+                        otherSession.send(SetPassengersPcPacket(vehicleId, listOf(ownEntityId)))
+                        println("sent set passenger to ${(otherSession.state as PlayPcSessionState).profile.name} $ownEntityId")
+                    }
+                }
+
+                setPeriodic(50) {
+                    pcEntity.getMovePacketsAndClear(pcEntity.loc.add(0f, 0f, 0.08f), false).forEach { packet ->
+                        server.sessions.values.forEach { otherSession ->
+                            otherSession.send(packet)
+                        }
+                    }
+                }
+            }
         }
     }
     

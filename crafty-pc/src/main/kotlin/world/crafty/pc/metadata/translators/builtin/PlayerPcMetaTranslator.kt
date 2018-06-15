@@ -7,6 +7,7 @@ import world.crafty.pc.metadata.translators.MetaNotImplementedYet
 import world.crafty.pc.metadata.translators.PcCraftyMetaTranslator
 import world.crafty.pc.metadata.translators.PcCraftyMetaTranslatorGroup
 import world.crafty.proto.metadata.MetaValue
+import world.crafty.proto.metadata.builtin.DisplayedSkinPartsBitField
 import world.crafty.proto.metadata.builtin.PlayerMeta
 import java.util.*
 
@@ -18,7 +19,11 @@ object PlayerPcMetaTranslator : PcCraftyMetaTranslatorGroup {
                 )
             },
             PlayerMeta.SCORE to MetaNotImplementedYet,
-            PlayerMeta.DISPLAYED_SKIN_PARTS to MetaNotImplementedYet,
+            PlayerMeta.DISPLAYED_SKIN_PARTS to object: PcCraftyMetaTranslator {
+                override fun fromCrafty(entity: PcEntity, meta: MetaValue) = mapOf(
+                        13 to MetadataEntry(MetadataType.BYTE, (meta.value as DisplayedSkinPartsBitField).bitfield)
+                )
+            },
             PlayerMeta.MAIN_HAND to MetaNotImplementedYet,
             PlayerMeta.CROUCHED to object: PcCraftyMetaTranslator {
                 override fun fromCrafty(entity: PcEntity, meta: MetaValue): Map<Int, MetadataEntry>? {                    

@@ -17,7 +17,7 @@ class World(val chunks: List<CraftyChunkColumn>, val spawn: Location) {
     val entities: Collection<Entity>
         get() = entitiesById.values
 
-    private var entityIdCounter = 0
+    private var entityIdCounter = 1
     fun nextEntityId() : Int {
         return ++entityIdCounter
     }
