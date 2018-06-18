@@ -26,7 +26,7 @@ private val log = logger<PcNetworkSession>()
 class PcNetworkSession(val connServer: PcConnectionServer, val worldServer: String, private val socket: NetSocket) {
     val address = socket.remoteAddress().host()
 
-    public var state: PcSessionState = HandshakePcSessionState(this) // TODO: oof
+    var state: PcSessionState = HandshakePcSessionState(this)
     
     var encryptionPass: EncryptionPass = NoEncryptionPass
     var compressionPass: CompressionPass = NoCompressionPass

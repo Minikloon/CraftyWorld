@@ -109,9 +109,25 @@ class PlayPcSessionState(
             }
             is ClientChatMessagePcPacket -> {
                 sendCrafty(ChatFromClientCraftyPacket(packet.text))
+                if(packet.text == "b") {
+                    var angleRad = 0.0
+                    val radius = 0.92
+                    setPeriodic(50) {
+                        angleRad += 2 * Math.PI / 20
+                        val xOffset = Math.cos(angleRad) * radius
+                        val zOffset = Math.sin(angleRad) * radius
+                        for(yOffset in 0..5) {
+                            session.send(ParticlePcPacket(49, false,
+                                    location.x + xOffset.toFloat(), location.y + yOffset * 0.5f, location.z + zOffset.toFloat(),
+                                    0f, 0f, 0f,
+                                    0f, 1, arrayOf()))
+                        }
+                    }
+                }
             }
             is PlayerPositionPcPacket -> {
                 val pos = Vector3f(packet.x.toFloat(), packet.y.toFloat(), packet.z.toFloat())
+                this.location = Location(pos.x, pos.y, pos.z, location.bodyYaw, location.headYaw, location.headPitch)
                 sendCrafty(SetPlayerPosCraftyPacket(pos, packet.onGround))
             }
             is PlayerPosAndLookPcPacket -> {
@@ -123,12 +139,14 @@ class PlayPcSessionState(
                         headYaw = Angle256.fromDegrees(packet.yaw),
                         headPitch = Angle256.fromDegrees(packet.pitch)
                 )
+                this.location = pos
                 sendCrafty(SetPlayerPosAndLookCraftyPacket(pos, packet.onGround))
             }
             is PlayerLookPcPacket -> {
                 val headPitch = Angle256.fromDegrees(packet.pitch)
                 val headYaw = Angle256.fromDegrees(packet.yaw)
                 val bodyYaw = headYaw
+                this.location = Location(location.x, location.y, location.z, bodyYaw, headYaw, headPitch)
                 sendCrafty(SetPlayerLookCraftyPacket(headPitch, headYaw, bodyYaw))
             }
             is EntityActionPcPacket -> {
@@ -293,28 +311,6 @@ class PlayPcSessionState(
                     0,
                     0, 0, 0
             ))
-
-            if(profile.name == "Minikloon") {
-                delay(100)
-                val vehicleId = it.entityId
-                server.sessions.values.forEach { otherSession ->
-                    if(otherSession == this.session) {
-                        otherSession.send(SetPassengersPcPacket(vehicleId, listOf(ownEntityId)))
-                        println("sent set passenger to ${(otherSession.state as PlayPcSessionState).profile.name} $ownEntityId")
-                    } else {
-                        otherSession.send(SetPassengersPcPacket(vehicleId, listOf(ownEntityId)))
-                        println("sent set passenger to ${(otherSession.state as PlayPcSessionState).profile.name} $ownEntityId")
-                    }
-                }
-
-                setPeriodic(50) {
-                    pcEntity.getMovePacketsAndClear(pcEntity.loc.add(0f, 0f, 0.08f), false).forEach { packet ->
-                        server.sessions.values.forEach { otherSession ->
-                            otherSession.send(packet)
-                        }
-                    }
-                }
-            }
         }
     }
     
