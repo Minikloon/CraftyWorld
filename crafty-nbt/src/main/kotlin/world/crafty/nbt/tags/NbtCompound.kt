@@ -83,9 +83,16 @@ class NbtCompound(name: String?, tags: Iterable<NbtTag> = emptyList()) : NbtTag(
 
     object Codec : NbtTagCodec() {
         override val id = 10
+        fun serializeIncludingSelf(obj: NbtCompound, stream: DataOutput) {
+            stream.writeByte(id)
+            serialize(obj, stream)
+        }
         override fun serialize(obj: Any, stream: DataOutput) {
             if(obj !is NbtCompound) throw IllegalArgumentException()
-            obj.tags.values.forEach { it.codec.serialize(it, stream) }
+            obj.tags.values.forEach {
+                stream.writeByte(it.codec.id)
+                it.codec.serialize(it, stream)
+            }
             stream.writeByte(NbtEnd.Codec.id)
         }
         override fun deserialize(name: String?, stream: NbtInputStream): NbtTag {
