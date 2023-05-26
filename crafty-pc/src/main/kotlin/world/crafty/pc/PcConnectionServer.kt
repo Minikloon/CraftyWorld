@@ -23,7 +23,7 @@ import javax.crypto.Cipher
 private val log = logger<PcConnectionServer>()
 class PcConnectionServer(val port: Int, val worldServer: String) : AbstractVerticle() {
     lateinit var server: NetServer
-    private val sessions = mutableMapOf<NetSocket, PcNetworkSession>()
+    public val sessions = mutableMapOf<NetSocket, PcNetworkSession>() // TODO: oof
     private val worldCaches = ConcurrentHashMap<String, ConcurrentColumnsCache<PrecompressedPayload>>() // TODO: share between connections server somehow
     val metaTranslatorRegistry = MetaTranslatorRegistry()
 

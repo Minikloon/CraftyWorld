@@ -101,6 +101,14 @@ class MinecraftInputStream(stream : InputStream) : DataInputStream(stream) {
         read(bytes)
         return bytes
     }
+
+    fun readIntArray(count: Int) : IntArray {
+        val entries = IntArray(count)
+        for(i in 0 until count) {
+            entries[i] = readInt()
+        }
+        return entries
+    }
     
     fun readRemainingBytes() : ByteArray {
         if(`in` !is ByteArrayInputStream && `in` !is BufferInputStream) 

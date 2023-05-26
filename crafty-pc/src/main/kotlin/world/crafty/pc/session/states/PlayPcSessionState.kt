@@ -1,13 +1,16 @@
 package world.crafty.pc.session.states
 
+import io.netty.buffer.ByteBuf
+import io.netty.buffer.Unpooled
 import io.vertx.core.eventbus.Message
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.joml.Vector3f
+import sun.misc.HexDumpEncoder
 import world.crafty.common.Angle256
 import world.crafty.common.Location
 import world.crafty.common.serialization.MinecraftInputStream
-import world.crafty.common.utils.logger
+import world.crafty.common.utils.*
 import world.crafty.common.vertx.CurrentVertx
 import world.crafty.common.vertx.typedConsumer
 import world.crafty.common.vertx.typedSend
@@ -21,6 +24,8 @@ import world.crafty.pc.proto.ServerBoundPcPlayPackets
 import world.crafty.pc.proto.packets.client.*
 import world.crafty.pc.proto.packets.server.*
 import world.crafty.pc.session.PcSessionState
+import world.crafty.pc.world.PcChunk
+import world.crafty.pc.world.PcChunkColumn
 import world.crafty.pc.world.toPcPacket
 import world.crafty.proto.CraftyChunkColumn
 import world.crafty.proto.CraftyPacket
@@ -29,6 +34,8 @@ import world.crafty.proto.packets.server.*
 import world.crafty.skinpool.CraftySkinPoolServer
 import world.crafty.skinpool.protocol.client.HashPollPoolPacket
 import world.crafty.skinpool.protocol.server.HashPollReplyPoolPacket
+import java.nio.ByteOrder
+import java.util.*
 import kotlin.reflect.KClass
 
 private val log = logger<PlayPcSessionState>()
@@ -63,8 +70,10 @@ class PlayPcSessionState(
         session.send(ServerPluginMessagePcPacket("MC|Brand", server.encodedBrand))
 
         registerCraftyConsumers()
+
+        session.send(SetPlayerAbilitiesPcPacket(0b1100, 0.1f, 0.05f))
         
-        val chunkRadiusReq = ChunksRadiusRequestCraftyPacket(prespawn.spawnLocation.positionVec3(), 0, 8)
+        val chunkRadiusReq = ChunksRadiusRequestCraftyPacket(location.positionVec3(), 0, 4)
         val chunkRadiusRes = sendCraftyAsync<ChunksRadiusResponseCraftyPacket>(chunkRadiusReq).body()
         val cache = server.getWorldCache(session.worldServer)
         chunkRadiusRes.chunkColumns.forEach { setColumn ->
@@ -100,9 +109,25 @@ class PlayPcSessionState(
             }
             is ClientChatMessagePcPacket -> {
                 sendCrafty(ChatFromClientCraftyPacket(packet.text))
+                if(packet.text == "b") {
+                    var angleRad = 0.0
+                    val radius = 0.92
+                    setPeriodic(50) {
+                        angleRad += 2 * Math.PI / 20
+                        val xOffset = Math.cos(angleRad) * radius
+                        val zOffset = Math.sin(angleRad) * radius
+                        for(yOffset in 0..5) {
+                            session.send(ParticlePcPacket(49, false,
+                                    location.x + xOffset.toFloat(), location.y + yOffset * 0.5f, location.z + zOffset.toFloat(),
+                                    0f, 0f, 0f,
+                                    0f, 1, arrayOf()))
+                        }
+                    }
+                }
             }
             is PlayerPositionPcPacket -> {
                 val pos = Vector3f(packet.x.toFloat(), packet.y.toFloat(), packet.z.toFloat())
+                this.location = Location(pos.x, pos.y, pos.z, location.bodyYaw, location.headYaw, location.headPitch)
                 sendCrafty(SetPlayerPosCraftyPacket(pos, packet.onGround))
             }
             is PlayerPosAndLookPcPacket -> {
@@ -114,12 +139,14 @@ class PlayPcSessionState(
                         headYaw = Angle256.fromDegrees(packet.yaw),
                         headPitch = Angle256.fromDegrees(packet.pitch)
                 )
+                this.location = pos
                 sendCrafty(SetPlayerPosAndLookCraftyPacket(pos, packet.onGround))
             }
             is PlayerLookPcPacket -> {
                 val headPitch = Angle256.fromDegrees(packet.pitch)
                 val headYaw = Angle256.fromDegrees(packet.yaw)
                 val bodyYaw = headYaw
+                this.location = Location(location.x, location.y, location.z, bodyYaw, headYaw, headPitch)
                 sendCrafty(SetPlayerLookCraftyPacket(headPitch, headYaw, bodyYaw))
             }
             is EntityActionPcPacket -> {
@@ -197,8 +224,6 @@ class PlayPcSessionState(
                     entityId = packet.entityId,
                     headYaw = packet.location.headYaw
             ))
-            delay(2000)
-            session.send(PlayerListItemPcPacket(PlayerListAction.REMOVE, listOf(PlayerListPcRemove(packet.uuid))))
         }
         
         craftyConsumer(RemovePlayerCraftyPacket::class) { packet ->
@@ -237,11 +262,10 @@ class PlayPcSessionState(
                     )
             ))
             session.send(TeleportPlayerPcPacket(location, relativeFlags = 0, confirmId = 1))
-            delay(2000)
-            session.send(PlayerListItemPcPacket(
-                    action = PlayerListAction.REMOVE,
-                    items = listOf(PlayerListPcRemove(profile.uuid))
-            ))
+
+            session.send(ScoreboardObjectivePcPacket("test", ScoreboardObjectiveAction.CREATE, "Hello!", 0))
+            session.send(DisplayScoreboardPcPacket(ScoreboardPosition.SIDEBAR, "test"))
+            session.send(UpdateScorePcPacket("Test line", UpdateScoreAction.UPSERT, "test", 0))
         }
         
         craftyConsumer(DisconnectPlayerCraftyPacket::class) {
@@ -257,6 +281,35 @@ class PlayPcSessionState(
             session.send(AnimationPcPacket(
                     entityId = it.entityId,
                     animation = anim
+            ))
+        }
+
+        craftyConsumer(AddEntityCraftyPacket::class) {
+            val pcEntity = PcEntity(it.entityId, it.location)
+            loadedEntities[it.entityId] = pcEntity
+            val metadata = pcEntity.metaFromCrafty(server.metaTranslatorRegistry, it.meta)
+            val uuid = UUID.randomUUID()
+            println("spawn entity with id ${it.entityId} for ${profile.name}")
+            /*session.send(SpawnMobPcPacket(
+                    it.entityId,
+                    uuid,
+                    29, // 29 = horse, bat = 3
+                    it.location.x.toDouble(),
+                    it.location.y.toDouble(),
+                    it.location.z.toDouble(),
+                    it.location.bodyYaw,
+                    Angle256.zero,
+                    it.location.headPitch,
+                    0, 0, 0,
+                    metadata
+            ))*/
+            session.send(SpawnObjectPcPacket(
+                    it.entityId,
+                    uuid,
+                    78, // 78 = armor stand,
+                    it.location,
+                    0,
+                    0, 0, 0
             ))
         }
     }

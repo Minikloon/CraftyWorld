@@ -10,7 +10,7 @@ class DestroyEntitiesPcPacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PcPacketCodec() {
-        override val id = 0x30
+        override val id = 0x34
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is DestroyEntitiesPcPacket) throw IllegalArgumentException()
             stream.writeSignedVarInt(obj.entityIds.size)

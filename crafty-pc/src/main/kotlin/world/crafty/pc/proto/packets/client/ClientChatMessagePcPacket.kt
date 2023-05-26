@@ -10,7 +10,7 @@ class ClientChatMessagePcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x02
+        override val id = 0x01
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientChatMessagePcPacket) throw IllegalArgumentException()
             stream.writeSignedString(obj.text)

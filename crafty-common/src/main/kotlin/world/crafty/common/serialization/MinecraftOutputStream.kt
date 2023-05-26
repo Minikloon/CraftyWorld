@@ -11,6 +11,12 @@ import java.io.OutputStream
 import java.util.*
 
 class MinecraftOutputStream(stream: OutputStream) : DataOutputStream(stream) {
+    fun write(value: IntArray) {
+        for(v in value) {
+            writeInt(v)
+        }
+    }
+
     fun writeUnsignedVarInt(value: Int) {
         var v = value
         while((v and -0x80) != 0x00) {

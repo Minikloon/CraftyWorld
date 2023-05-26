@@ -11,7 +11,7 @@ class ServerPluginMessagePcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x18
+        override val id = 0x19
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ServerPluginMessagePcPacket) throw IllegalArgumentException()
             stream.writeSignedString(obj.channel)

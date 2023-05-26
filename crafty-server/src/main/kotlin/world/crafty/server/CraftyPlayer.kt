@@ -16,6 +16,7 @@ import world.crafty.proto.MinecraftPlatform
 import world.crafty.proto.packets.client.*
 import world.crafty.proto.packets.server.*
 import world.crafty.server.entity.PlayerEntity
+import world.crafty.server.entity.HorseEntity
 import java.time.Duration
 import java.time.Instant
 import java.util.*
@@ -37,8 +38,8 @@ class CraftyPlayer(
     val entityId = server.world.nextEntityId()
     var entity: PlayerEntity? = null // TODO: split this class into spawned/unspawned to avoid null checks
     
-    private val pings = mutableMapOf<Int, CraftyPing>()
-    private var pingCounter = 0
+    private val pings = mutableMapOf<Long, CraftyPing>()
+    private var pingCounter = 0L
 
     private val timerIds = mutableSetOf<Long>() // TODO: make player a verticle to avoid this shit?
     private val consumers = mutableSetOf<MessageConsumer<*>>()
@@ -64,6 +65,12 @@ class CraftyPlayer(
             val text = "$username > ${it.text}"
             server.players.forEach {
                 it.send(ChatMessageCraftyPacket(text))
+            }
+
+            if(it.text == "e") {
+                entity?.let { entity ->
+                    server.world.spawn { world, id -> HorseEntity(world, id, entity.location) }
+                }
             }
         }
 
@@ -169,6 +176,6 @@ class CraftyPlayer(
 }
 
 private data class CraftyPing(
-        val id: Int,
+        val id: Long,
         val timestamp: Instant
 )

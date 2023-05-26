@@ -11,7 +11,7 @@ class DisconnectPcPacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PcPacketCodec() {
-        override val id = 0x1a
+        override val id = 0x1B
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is DisconnectPcPacket) throw IllegalArgumentException()
             stream.writeJson(obj.message)

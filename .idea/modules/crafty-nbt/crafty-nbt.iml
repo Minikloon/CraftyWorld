@@ -5,6 +5,7 @@
     <content url="file://$MODULE_DIR$/../../../crafty-nbt">
       <excludeFolder url="file://$MODULE_DIR$/../../../crafty-nbt/.gradle" />
       <excludeFolder url="file://$MODULE_DIR$/../../../crafty-nbt/build" />
+      <excludeFolder url="file://$MODULE_DIR$/../../../crafty-nbt/out" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

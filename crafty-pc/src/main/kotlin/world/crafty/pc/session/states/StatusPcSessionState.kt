@@ -21,8 +21,8 @@ class StatusPcSessionState(session: PcNetworkSession) : PcSessionState(session) 
 
                 val lpr = StatusResponsePcPacket(
                             StatusResponsePcPacket.ServerVersion(
-                                    name = "§l1.11.2+",
-                                    protocol = 316
+                                    name = "§l1.13",
+                                    protocol = 384
                             ), StatusResponsePcPacket.PlayerStatus(
                             max = 1337,
                             online = 1336

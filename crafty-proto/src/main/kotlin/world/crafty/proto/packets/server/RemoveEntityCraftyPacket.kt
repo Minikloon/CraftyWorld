@@ -4,18 +4,18 @@ import world.crafty.common.serialization.MinecraftInputStream
 import world.crafty.common.serialization.MinecraftOutputStream
 import world.crafty.proto.CraftyPacket
 
-class PingCraftyPacket(
-        val id: Long
+class RemoveEntityCraftyPacket(
+        val entityId: Int
 ) : CraftyPacket() {
     override val codec = Codec
     object Codec : CraftyPacketCodec() {
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
-            if(obj !is PingCraftyPacket) throw IllegalArgumentException()
-            stream.writeUnsignedVarLong(obj.id)
+            if(obj !is RemoveEntityCraftyPacket) throw IllegalArgumentException()
+            stream.writeUnsignedVarInt(obj.entityId)
         }
         override fun deserialize(stream: MinecraftInputStream): CraftyPacket {
-            return PingCraftyPacket(
-                    id = stream.readUnsignedVarLong()
+            return RemoveEntityCraftyPacket(
+                    entityId = stream.readUnsignedVarInt()
             )
         }
     }

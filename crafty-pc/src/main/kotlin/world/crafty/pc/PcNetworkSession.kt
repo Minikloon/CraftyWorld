@@ -26,7 +26,7 @@ private val log = logger<PcNetworkSession>()
 class PcNetworkSession(val connServer: PcConnectionServer, val worldServer: String, private val socket: NetSocket) {
     val address = socket.remoteAddress().host()
 
-    private var state: PcSessionState = HandshakePcSessionState(this)
+    var state: PcSessionState = HandshakePcSessionState(this)
     
     var encryptionPass: EncryptionPass = NoEncryptionPass
     var compressionPass: CompressionPass = NoCompressionPass
@@ -42,7 +42,7 @@ class PcNetworkSession(val connServer: PcConnectionServer, val worldServer: Stri
         val bs = BufferOutputStream(buffer)
         val stream = encryptionPass.encryptionStream(bs)
         content.serializeWithLengthPrefix(stream, compressionPass.compressing, compressionPass.threshold)
-        
+
         try {
             socket.write(buffer)
         } catch(e: Exception) {

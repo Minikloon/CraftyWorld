@@ -17,11 +17,12 @@ data class MetadataEntry(
             MetadataType.FLOAT -> value is Float
             MetadataType.STRING -> value is String
             MetadataType.CHAT -> throw NotImplementedError()
+            MetadataType.OPTIONAL_CHAT -> throw NotImplementedError()
             MetadataType.ITEM_STACK -> throw NotImplementedError()
             MetadataType.BOOLEAN -> value is Boolean
             MetadataType.ROTATION -> value is Vector3fc
             MetadataType.POSITION -> value is Vector3ic
-            MetadataType.OPTIONAL_POSITION -> value is Vector3ic? 
+            MetadataType.OPTIONAL_POSITION -> value is Vector3ic?
             MetadataType.DIRECTION -> value is Int
             MetadataType.OPTIONAL_UUID -> value is UUID?
             MetadataType.OPTIONAL_BLOCK_ID -> throw NotImplementedError()
@@ -77,6 +78,7 @@ data class MetadataEntry(
                 MetadataType.FLOAT -> stream.readFloat()
                 MetadataType.STRING -> stream.readSignedString()
                 MetadataType.CHAT -> throw NotImplementedError()
+                MetadataType.OPTIONAL_CHAT -> throw NotImplementedError()
                 MetadataType.ITEM_STACK -> throw NotImplementedError()
                 MetadataType.BOOLEAN -> stream.readBoolean()
                 MetadataType.ROTATION -> stream.readVector3f()

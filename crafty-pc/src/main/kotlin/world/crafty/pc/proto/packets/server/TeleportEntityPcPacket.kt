@@ -16,7 +16,7 @@ class TeleportEntityPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x49
+        override val id = 0x4F
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is TeleportEntityPcPacket) throw IllegalArgumentException()
             stream.writeSignedVarInt(obj.entityId)

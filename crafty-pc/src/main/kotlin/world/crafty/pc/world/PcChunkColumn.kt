@@ -1,17 +1,19 @@
 package world.crafty.pc.world
 
+import sun.misc.HexDumpEncoder
 import world.crafty.common.utils.CompressionAlgorithm
 import world.crafty.common.utils.compressed
+import world.crafty.common.utils.decompressed
 import world.crafty.pc.proto.PrecompressedPayload
 import world.crafty.pc.proto.packets.server.ChunkDataPcPacket
 import world.crafty.proto.CraftyChunkColumn
 
-class PcChunkColumn(val x: Int, val z: Int, val chunks: Array<PcChunk?>, val biomes: ByteArray, val dimension: Dimension = Dimension.OVERWORLD) {
+class PcChunkColumn(val x: Int, val z: Int, val chunks: Array<PcChunk?>, val biomes: IntArray, val dimension: Dimension = Dimension.OVERWORLD) {
     constructor(x: Int, z: Int, dimension: Dimension = Dimension.OVERWORLD) : this(
             x,
             z,
             arrayOfNulls(16),
-            ByteArray(256),
+            IntArray(256),
             dimension
     )
     
@@ -24,7 +26,7 @@ class PcChunkColumn(val x: Int, val z: Int, val chunks: Array<PcChunk?>, val bio
         section.setTypeAndData(x, y, z, type, data)
     }
 
-    fun setBiome(x: Int, z: Int, biome: Byte) {
+    fun setBiome(x: Int, z: Int, biome: Int) {
         val index = (z shl 4) or x
         biomes[index] = biome
     }
@@ -66,11 +68,12 @@ class PcChunkColumn(val x: Int, val z: Int, val chunks: Array<PcChunk?>, val bio
 }
 
 fun CraftyChunkColumn.toPcPacket() : PrecompressedPayload {
+    val biomes1dot13 = IntArray(biomes.size) { i -> biomes[i].toInt() } // TODO: hack!
     val pcColumn = PcChunkColumn(
             x = x,
             z = z,
             chunks = chunks.map { if(it == null) null else PcChunk.convertCraftyChunk(it) }.toTypedArray(),
-            biomes = biomes
+            biomes = biomes1dot13
     )
     val packet = pcColumn.toPacket()
     val encodedPacket = packet.serializedWithPacketId()

@@ -18,7 +18,7 @@ class PlayerListItemPcPacket(
     override val codec = Codec
 
     companion object Codec : PcPacketCodec() {
-        override val id = 0x2D
+        override val id = 0x2F
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if (obj !is PlayerListItemPcPacket) throw IllegalArgumentException()
             stream.writeSignedVarInt(obj.action.ordinal)

@@ -7,7 +7,7 @@ import world.crafty.common.utils.NibbleArray
 import world.crafty.proto.CraftyChunk
 
 private val blocksPerChunk = 16 * 16 * 16
-private val bitsPerBlock = 13
+private val bitsPerBlock = 14
 
 class PcChunk(
         val typeAndData: LongPackedArray, 
@@ -21,7 +21,7 @@ class PcChunk(
     }
     
     val byteSize by lazy {
-        2 + varIntSize(typeAndData.backing.size * 8) + typeAndData.backing.size * 8 + blockLight.backing.size + (skyLight?.backing?.size ?: 0)
+        1 + varIntSize(typeAndData.backing.size * 8) + typeAndData.backing.size * 8 + blockLight.backing.size + (skyLight?.backing?.size ?: 0)
     }
 
     constructor(dimension: Dimension = Dimension.OVERWORLD) : this(
@@ -61,7 +61,6 @@ class PcChunk(
 
     fun writeToStream(stream: MinecraftOutputStream) {
         stream.writeByte(bitsPerBlock)
-        stream.writeSignedVarInt(0)
         stream.writeSignedVarInt(typeAndData.backing.size)
         typeAndData.backing.forEach { stream.writeLong(it) }
         stream.write(blockLight.backing)
@@ -73,7 +72,8 @@ class PcChunk(
         fun typesAndDataLongPacked(types: ByteArray, data: NibbleArray) : LongPackedArray {
             val packed = LongPackedArray(bitsPerBlock, blocksPerChunk)
             for(i in 0 until blocksPerChunk) {
-                val combined = ((types[i].toInt() and 0xFF) shl 4) or data[i]
+                val combined = if(types[i].toInt() == 0) 0 else 1
+                //val combined = ((types[i].toInt() and 0xFF) shl 4) or data[i] // TODO; 1.13 hack!
                 packed[i] = combined
             }
             return packed

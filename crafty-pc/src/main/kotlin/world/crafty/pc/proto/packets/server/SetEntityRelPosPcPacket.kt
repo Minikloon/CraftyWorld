@@ -14,7 +14,7 @@ class SetEntityRelPosPcPacket(
     override val id = Codec.id
     override val codec = Codec
     object Codec : PcPacketCodec() {
-        override val id = 0x25
+        override val id = 0x27
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is SetEntityRelPosPcPacket) throw IllegalArgumentException()
             stream.writeSignedVarInt(obj.entityId)

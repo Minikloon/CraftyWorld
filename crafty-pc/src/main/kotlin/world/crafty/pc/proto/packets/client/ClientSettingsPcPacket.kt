@@ -15,7 +15,7 @@ class ClientSettingsPcPacket(
     override val id = Codec.id
     override val codec = Codec
     companion object Codec : PcPacketCodec() {
-        override val id = 0x04
+        override val id = 0x03
         override fun serialize(obj: Any, stream: MinecraftOutputStream) {
             if(obj !is ClientSettingsPcPacket) throw IllegalArgumentException()
             stream.writeSignedString(obj.locale)
